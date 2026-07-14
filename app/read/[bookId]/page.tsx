@@ -5,9 +5,11 @@ import {
   getProgress,
   getPublishedBook,
   listReadableChapters,
+  listReadChapterIds,
   resolveResumeChapter,
 } from "@/lib/data";
 import ReaderNav from "@/components/ReaderNav";
+import ReaderChapterList from "@/components/ReaderChapterList";
 import Logo from "@/components/Logo";
 
 export default async function BookTocPage({
@@ -21,18 +23,16 @@ export default async function BookTocPage({
   if (!book) notFound();
 
   const chapters = await listReadableChapters(bookId, user);
-  const [progress, resume] = await Promise.all([
+  const [progress, resume, readIds] = await Promise.all([
     getProgress(user.id, bookId),
     resolveResumeChapter(user, bookId, user.id),
+    listReadChapterIds(user.id, bookId),
   ]);
 
-  // The reader has a single stored position per book (current chapter + how far
-  // into it). Since chapters are ordered by position, everything before the
-  // current chapter is "read", the current chapter is in progress, and the rest
-  // are unread.
-  const currentIndex = progress?.chapter_id
-    ? chapters.findIndex((c) => c.id === progress.chapter_id)
-    : -1;
+  // Read chapters are tracked per-chapter (any chapter the reader has opened),
+  // so out-of-order reading is reflected too. The single stored position marks
+  // the "current" chapter and how far into it the reader is.
+  const currentChapterId = progress?.chapter_id ?? null;
   const currentPct = Math.round(
     Math.min(1, Math.max(0, progress?.scroll_fraction ?? 0)) * 100
   );
@@ -68,62 +68,17 @@ export default async function BookTocPage({
         {chapters.length === 0 ? (
           <p className="text-muted text-sm">No chapters available yet.</p>
         ) : (
-          <ol className="card divide-y divide-line">
-            {chapters.map((ch, i) => {
-              const isRead = currentIndex >= 0 && i < currentIndex;
-              const isCurrent = i === currentIndex;
-              return (
-                <li key={ch.id}>
-                  <Link
-                    href={`/read/${bookId}/${ch.id}`}
-                    aria-current={isCurrent ? "true" : undefined}
-                    className={`flex items-center gap-3 px-4 py-3 hover:bg-line/40 ${
-                      isRead ? "opacity-55" : ""
-                    } ${isCurrent ? "bg-accent/8" : ""}`}
-                  >
-                    <span className="w-6 shrink-0 text-right text-sm text-muted tabular-nums">
-                      {isRead ? (
-                        <span className="text-accent" aria-label="Read" title="Read">
-                          ✓
-                        </span>
-                      ) : (
-                        i + 1
-                      )}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span
-                        className={`block truncate ${isCurrent ? "font-semibold" : ""}`}
-                        style={{ fontFamily: "var(--font-serif)" }}
-                      >
-                        {ch.title}
-                      </span>
-                      {isCurrent && (
-                        <span className="mt-1.5 flex items-center gap-2">
-                          <span className="h-1 flex-1 overflow-hidden rounded-full bg-line">
-                            <span
-                              className="block h-full rounded-full bg-accent"
-                              style={{ width: `${Math.max(currentPct, 4)}%` }}
-                            />
-                          </span>
-                          <span className="text-xs text-muted tabular-nums">
-                            {currentPct}%
-                          </span>
-                        </span>
-                      )}
-                    </span>
-                    {isCurrent && (
-                      <span className="badge badge-published shrink-0">Reading</span>
-                    )}
-                    {ch.is_explicit && (
-                      <span className="badge badge-spicy shrink-0" title="Spicy">
-                        🌶
-                      </span>
-                    )}
-                  </Link>
-                </li>
-              );
-            })}
-          </ol>
+          <ReaderChapterList
+            bookId={bookId}
+            chapters={chapters.map((c) => ({
+              id: c.id,
+              title: c.title,
+              is_explicit: c.is_explicit,
+            }))}
+            readIds={readIds}
+            currentChapterId={currentChapterId}
+            currentPct={currentPct}
+          />
         )}
       </main>
     </>

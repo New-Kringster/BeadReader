@@ -402,6 +402,42 @@ export async function addReadingTime(
   });
 }
 
+// ============================================================
+// Per-chapter read tracking (which chapters a reader has opened)
+// ============================================================
+/** Record that a reader has opened (read) a chapter. Idempotent. */
+export async function markChapterRead(
+  userId: string,
+  bookId: string,
+  chapterId: string
+): Promise<void> {
+  await supabaseAdmin
+    .from("chapter_reads")
+    .upsert(
+      { user_id: userId, chapter_id: chapterId, book_id: bookId, read_at: new Date().toISOString() },
+      { onConflict: "user_id,chapter_id" }
+    );
+}
+
+/** The set of chapter ids in this book that the reader has opened. */
+export async function listReadChapterIds(userId: string, bookId: string): Promise<string[]> {
+  const { data } = await supabaseAdmin
+    .from("chapter_reads")
+    .select("chapter_id")
+    .eq("user_id", userId)
+    .eq("book_id", bookId);
+  return (data ?? []).map((r) => r.chapter_id as string);
+}
+
+/** Clear a single chapter's read mark for this reader (undo). */
+export async function unmarkChapterRead(userId: string, chapterId: string): Promise<void> {
+  await supabaseAdmin
+    .from("chapter_reads")
+    .delete()
+    .eq("user_id", userId)
+    .eq("chapter_id", chapterId);
+}
+
 export async function getReadingTime(userId: string, bookId: string): Promise<number> {
   const { data } = await supabaseAdmin
     .from("reading_time")

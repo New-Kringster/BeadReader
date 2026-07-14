@@ -89,6 +89,13 @@ export default function ReaderView({
   const wrapRef = useRef<HTMLDivElement>(null);
   const colsRef = useRef<HTMLDivElement>(null);
 
+  // Mark this chapter as read once the reader actually lands on it. Done from
+  // the client (not the server page) so Next.js prefetching a chapter link
+  // doesn't mark it read before the reader opens it.
+  useEffect(() => {
+    postJSON("/api/read", { bookId, chapterId: chapter.id });
+  }, [bookId, chapter.id]);
+
   // ---- reading-time tracking (active seconds) ----
   const activeSecondsRef = useRef(0);
   const lastActiveRef = useRef(Date.now());

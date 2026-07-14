@@ -26,6 +26,9 @@ Designed for one admin and a handful of readers — not a public product.
     **scroll vs. paginated** layout — all saved per user.
   - **Auto-resume**: opening a book jumps straight to the exact chapter and
     scroll/page position last reached.
+  - **Contents with read tracking**: the chapter list marks a 🌶 on spicy
+    chapters, shows a progress bar on the chapter in progress, and greys out
+    every chapter already opened (with a low-key per-chapter "mark unread").
   - **Prev/next chapter** navigation (buttons, an end-of-chapter button, arrow keys)
     and a Contents drawer.
   - **Active reading-time tracking** that pauses when the tab loses focus or goes idle.
