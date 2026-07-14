@@ -73,7 +73,7 @@ export default async function BookTocPage({
             chapters={chapters.map((c) => ({
               id: c.id,
               title: c.title,
-              is_explicit: c.is_explicit,
+              spicy: c.has_spicy,
             }))}
             readIds={readIds}
             currentChapterId={currentChapterId}

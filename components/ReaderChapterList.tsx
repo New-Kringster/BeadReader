@@ -6,7 +6,7 @@ import { resetChapterReadAction } from "@/app/actions/reading";
 interface Row {
   id: string;
   title: string;
-  is_explicit: boolean;
+  spicy: boolean;
 }
 
 export default function ReaderChapterList({
@@ -80,7 +80,7 @@ export default function ReaderChapterList({
                 )}
               </span>
               {isCurrent && <span className="badge badge-published shrink-0">Reading</span>}
-              {ch.is_explicit && (
+              {ch.spicy && (
                 <span className="badge badge-spicy shrink-0" title="Spicy">
                   🌶
                 </span>

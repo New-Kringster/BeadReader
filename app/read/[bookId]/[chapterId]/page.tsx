@@ -46,7 +46,7 @@ export default async function ReadingPage({
       next={next ? { id: next.id, title: next.title } : null}
       index={index + 1}
       total={chapters.length}
-      toc={chapters.map((c) => ({ id: c.id, title: c.title, is_explicit: c.is_explicit }))}
+      toc={chapters.map((c) => ({ id: c.id, title: c.title, spicy: c.has_spicy }))}
       initialSettings={{
         bg_color: settings.bg_color,
         text_color: settings.text_color,

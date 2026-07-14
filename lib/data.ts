@@ -1,7 +1,7 @@
 import "server-only";
 import { supabaseAdmin } from "./supabase";
 import { generateAccessCode } from "./codes";
-import { processChapterContent } from "./redact";
+import { processChapterContent, hasSpicy } from "./redact";
 import {
   DEFAULT_SETTINGS,
   type Book,
@@ -103,19 +103,32 @@ function applyRedaction<T extends Pick<Chapter, "content">>(
   return { ...chapter, content: processChapterContent(chapter.content, canSeeSpicy(user)) };
 }
 
+/** A readable chapter plus a `has_spicy` flag for the contents list. It's true
+ *  when the chapter is whole-chapter explicit OR contains any inline `[[spicy]]`
+ *  passage — computed from the RAW content, before redaction strips the markers. */
+export type ReadableChapter = Chapter & { has_spicy: boolean };
+
+/** Whether to flag a chapter 🌶: whole-chapter explicit or inline spicy content. */
+function isSpicyChapter(raw: Chapter): boolean {
+  return raw.is_explicit || hasSpicy(raw.content);
+}
+
 /**
  * The explicit-content gate. For readers we return only PUBLISHED chapters, and
  * fully-hidden ("spicy") chapters are excluded IN THE QUERY unless the user has
  * access — so a reader without access never receives them at all. Inline spicy
  * passages in the remaining chapters are redacted here, server-side.
+ *
+ * `has_spicy` is derived from each chapter's raw content BEFORE redaction (which
+ * removes the markers), so the contents list can flag inline-spicy chapters too.
  */
 export async function listReadableChapters(
   bookId: string,
   user: Pick<User, "role" | "has_explicit_access">
-): Promise<Chapter[]> {
+): Promise<ReadableChapter[]> {
   if (user.role === "admin") {
     const chapters = await listChapters(bookId);
-    return chapters.map((c) => applyRedaction(c, user));
+    return chapters.map((c) => ({ ...applyRedaction(c, user), has_spicy: isSpicyChapter(c) }));
   }
 
   let query = supabaseAdmin
@@ -128,7 +141,10 @@ export async function listReadableChapters(
   if (!user.has_explicit_access) query = query.eq("is_explicit", false);
 
   const { data } = await query;
-  return ((data ?? []) as Chapter[]).map((c) => applyRedaction(c, user));
+  return ((data ?? []) as Chapter[]).map((c) => ({
+    ...applyRedaction(c, user),
+    has_spicy: isSpicyChapter(c),
+  }));
 }
 
 export async function getChapter(id: string): Promise<Chapter | null> {

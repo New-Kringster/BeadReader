@@ -65,7 +65,7 @@ export default function ReaderView({
   next: NavChapter | null;
   index: number;
   total: number;
-  toc: { id: string; title: string; is_explicit: boolean }[];
+  toc: { id: string; title: string; spicy: boolean }[];
   initialSettings: Settings;
   initialScrollFraction: number;
   initialPage: number;
@@ -556,7 +556,7 @@ export default function ReaderView({
                 >
                   <span className="text-muted w-6 text-right tabular-nums">{i + 1}</span>
                   <span className="flex-1">{c.title}</span>
-                  {c.is_explicit && <span>🌶</span>}
+                  {c.spicy && <span>🌶</span>}
                 </button>
               </li>
             ))}
