@@ -23,7 +23,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           {/* Desktop inline nav */}
           <nav className="hidden sm:flex items-center gap-4 text-sm ml-2">
             <Link href="/admin" className="hover:underline">Books</Link>
-            <Link href="/admin/readers" className="hover:underline">Readers</Link>
+            <Link href="/admin/readers" className="hover:underline">People</Link>
             <Link href="/read" className="hover:underline text-muted">View as reader ↗</Link>
           </nav>
           <div className="ml-auto flex items-center gap-2 sm:gap-3 shrink-0">
@@ -35,7 +35,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         {/* Mobile nav row */}
         <nav className="sm:hidden flex items-center gap-5 px-4 pb-2 -mt-1 text-sm border-t border-line pt-2">
           <Link href="/admin" className="hover:underline">Books</Link>
-          <Link href="/admin/readers" className="hover:underline">Readers</Link>
+          <Link href="/admin/readers" className="hover:underline">People</Link>
           <Link href="/read" className="hover:underline text-muted">View as reader ↗</Link>
         </nav>
       </header>

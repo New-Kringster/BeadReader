@@ -7,6 +7,7 @@ import {
   type Chapter,
   type ReaderSettings,
   type ReadingProgress,
+  type Role,
   type User,
 } from "./types";
 
@@ -196,27 +197,54 @@ export async function getUserByAccessCode(code: string): Promise<User | null> {
   return (data as User) ?? null;
 }
 
-export async function listReaders(): Promise<User[]> {
+/** All users (admins first, then readers), newest first within each. */
+export async function listAllUsers(): Promise<User[]> {
   const { data } = await supabaseAdmin
     .from("users")
     .select("*")
-    .eq("role", "reader")
+    .order("role", { ascending: true }) // 'admin' < 'reader'
     .order("created_at", { ascending: false });
   return (data ?? []) as User[];
 }
 
-export async function createReader(name: string): Promise<User> {
-  // Retry until we land a unique code (collisions are astronomically unlikely).
+/**
+ * Create a user with an optional preset access code. If `code` is omitted a
+ * random one is generated. Admins get explicit access by default (they see
+ * everything anyway). Returns { error } on a duplicate preset code.
+ */
+export async function createUser(
+  name: string,
+  role: Role,
+  code?: string
+): Promise<{ user?: User; error?: string }> {
+  const base = {
+    name: name.trim() || (role === "admin" ? "Admin" : "Reader"),
+    role,
+    has_explicit_access: role === "admin",
+  };
+
+  if (code && code.trim()) {
+    const { data, error } = await supabaseAdmin
+      .from("users")
+      .insert({ ...base, access_code: code.trim() })
+      .select("*")
+      .single();
+    if (error?.code === "23505") return { error: "That access code is already taken." };
+    if (error) throw error;
+    return { user: data as User };
+  }
+
+  // Auto-generate; retry on the (astronomically unlikely) collision.
   for (let attempt = 0; attempt < 6; attempt++) {
     const { data, error } = await supabaseAdmin
       .from("users")
-      .insert({ name: name.trim() || "Reader", role: "reader", access_code: generateAccessCode() })
+      .insert({ ...base, access_code: generateAccessCode() })
       .select("*")
       .single();
-    if (!error) return data as User;
-    if (error.code !== "23505") throw error; // 23505 = unique violation
+    if (!error) return { user: data as User };
+    if (error.code !== "23505") throw error;
   }
-  throw new Error("Could not generate a unique access code, please try again.");
+  return { error: "Could not generate a unique access code, please try again." };
 }
 
 export async function regenerateCode(userId: string): Promise<string> {
@@ -246,8 +274,8 @@ export async function setCustomAccessCode(
   return { ok: true };
 }
 
-export async function setReaderRevoked(userId: string, revoked: boolean): Promise<void> {
-  await supabaseAdmin.from("users").update({ revoked }).eq("id", userId).eq("role", "reader");
+export async function setUserRevoked(userId: string, revoked: boolean): Promise<void> {
+  await supabaseAdmin.from("users").update({ revoked }).eq("id", userId);
 }
 
 export async function setReaderExplicit(userId: string, hasAccess: boolean): Promise<void> {
@@ -258,8 +286,20 @@ export async function setReaderExplicit(userId: string, hasAccess: boolean): Pro
     .eq("role", "reader");
 }
 
-export async function deleteReader(userId: string): Promise<void> {
-  await supabaseAdmin.from("users").delete().eq("id", userId).eq("role", "reader");
+export async function deleteUser(userId: string): Promise<void> {
+  await supabaseAdmin.from("users").delete().eq("id", userId);
+}
+
+/** Number of admins (used to prevent removing/revoking the last one). */
+export async function countAdmins(excludeUserId?: string): Promise<number> {
+  let q = supabaseAdmin
+    .from("users")
+    .select("id", { count: "exact", head: true })
+    .eq("role", "admin")
+    .eq("revoked", false);
+  if (excludeUserId) q = q.neq("id", excludeUserId);
+  const { count } = await q;
+  return count ?? 0;
 }
 
 // ============================================================

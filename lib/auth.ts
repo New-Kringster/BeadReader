@@ -24,17 +24,17 @@ export async function getCurrentUser(): Promise<User | null> {
   return data as User;
 }
 
-/** Any valid, non-revoked user, or redirect to /login. */
+/** Any valid, non-revoked user. A stale/invalid cookie is cleared via /logout. */
 export async function requireUser(): Promise<User> {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  if (!user) redirect("/logout");
   return user;
 }
 
-/** Admin only. Readers get bounced to their library; guests to /login. */
+/** Admin only. Readers get bounced to their library; invalid cookies to /logout. */
 export async function requireAdmin(): Promise<User> {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  if (!user) redirect("/logout");
   if (user.role !== "admin") redirect("/read");
   return user;
 }

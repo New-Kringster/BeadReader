@@ -1,6 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
+import { validateAccessCode } from "@/lib/codes";
 import { setCustomAccessCode, regenerateCode } from "@/lib/data";
 
 export type CodeState = { error?: string; success?: string };
@@ -14,9 +15,8 @@ export async function setMyCodeAction(
   if (!user) return { error: "You're not signed in." };
 
   const code = String(formData.get("code") ?? "").trim();
-  if (code.length < 4) return { error: "Use at least 4 characters." };
-  if (code.length > 40) return { error: "That's too long (40 characters max)." };
-  if (/\s/.test(code)) return { error: "No spaces in the code, please." };
+  const invalid = validateAccessCode(code);
+  if (invalid) return { error: invalid };
   if (code === user.access_code) return { error: "That's already your code." };
 
   const res = await setCustomAccessCode(user.id, code);
