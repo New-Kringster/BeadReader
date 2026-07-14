@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { listAllBooks, listChapters } from "@/lib/data";
+import Logo from "@/components/Logo";
 
 export default async function AdminDashboard() {
   const books = await listAllBooks();
@@ -34,7 +35,7 @@ export default async function AdminDashboard() {
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={book.cover_url} alt="" className="w-full h-full object-cover" />
                 ) : (
-                  <span className="text-xl">📕</span>
+                  <Logo size={26} className="opacity-40" />
                 )}
               </div>
               <div className="min-w-0 flex-1">

@@ -2,6 +2,7 @@
 import { useActionState } from "react";
 import { loginAction, type LoginState } from "@/app/actions/auth";
 import ThemeToggle from "@/components/ThemeToggle";
+import Logo from "@/components/Logo";
 
 export default function LoginPage() {
   const [state, formAction, pending] = useActionState<LoginState, FormData>(
@@ -16,9 +17,7 @@ export default function LoginPage() {
       </div>
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="text-5xl mb-3" aria-hidden>
-            📖
-          </div>
+          <Logo size={64} className="mx-auto mb-3" />
           <h1 className="text-3xl font-bold" style={{ fontFamily: "var(--font-serif)" }}>
             BeadReader
           </h1>

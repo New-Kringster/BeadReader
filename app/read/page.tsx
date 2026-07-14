@@ -7,6 +7,7 @@ import {
 } from "@/lib/data";
 import { formatDuration } from "@/lib/format";
 import ReaderNav from "@/components/ReaderNav";
+import Logo from "@/components/Logo";
 
 export default async function LibraryPage() {
   const user = (await getCurrentUser())!;
@@ -35,7 +36,7 @@ export default async function LibraryPage() {
 
         {visible.length === 0 ? (
           <div className="card p-10 text-center text-muted">
-            <p className="text-4xl mb-3">🕮</p>
+            <Logo size={48} className="mx-auto mb-3 opacity-60" />
             <p>Nothing to read yet. Check back once the library owner publishes a book.</p>
           </div>
         ) : (
@@ -51,7 +52,7 @@ export default async function LibraryPage() {
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={book.cover_url} alt="" className="w-full h-full object-cover" />
                   ) : (
-                    <span className="text-2xl">📗</span>
+                    <Logo size={30} className="opacity-40" />
                   )}
                 </div>
                 <div className="min-w-0 flex-1">

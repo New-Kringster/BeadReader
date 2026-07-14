@@ -130,6 +130,24 @@ body {
 }
 .reader-icon:hover { background: color-mix(in oklab, currentColor 12%, transparent); }
 
+/* theme-agnostic controls used inside the reader (inherit the reading colors) */
+.reader-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem;
+  padding: 0.45rem 0.85rem; border-radius: 0.5rem; font-size: 0.85rem; font-weight: 600;
+  cursor: pointer; white-space: nowrap; color: inherit; background: transparent;
+  border: 1px solid color-mix(in oklab, currentColor 28%, transparent);
+  transition: background 0.12s;
+}
+.reader-btn:hover { background: color-mix(in oklab, currentColor 10%, transparent); }
+.reader-btn:disabled { opacity: 0.5; cursor: default; }
+.reader-field {
+  width: 100%; padding: 0.6rem 0.7rem; border-radius: 0.5rem; color: inherit;
+  background: color-mix(in oklab, currentColor 6%, transparent);
+  border: 1px solid color-mix(in oklab, currentColor 25%, transparent);
+  font-family: var(--font-sans); font-size: 0.95rem;
+}
+.reader-field:focus { outline: 2px solid color-mix(in oklab, currentColor 35%, transparent); outline-offset: 1px; }
+
 /* ---- rendered markdown (reader + preview) ---- */
 .reader-content { line-height: 1.75; }
 .reader-content > * + * { margin-top: 1.1em; }

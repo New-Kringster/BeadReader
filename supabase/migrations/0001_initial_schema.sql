@@ -91,6 +91,16 @@ create table if not exists public.reading_time (
   primary key (user_id, book_id)
 );
 
+-- ---------- comments (per chapter) ----------
+create table if not exists public.comments (
+  id uuid primary key default gen_random_uuid(),
+  chapter_id uuid not null references public.chapters(id) on delete cascade,
+  user_id uuid not null references public.users(id) on delete cascade,
+  body text not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists comments_chapter_idx on public.comments(chapter_id, created_at);
+
 -- ---------- Lock down: RLS on, no policies (service_role bypasses) ----------
 alter table public.users            enable row level security;
 alter table public.books            enable row level security;
@@ -98,6 +108,7 @@ alter table public.chapters         enable row level security;
 alter table public.reading_progress enable row level security;
 alter table public.reader_settings  enable row level security;
 alter table public.reading_time     enable row level security;
+alter table public.comments         enable row level security;
 
 -- ---------- Storage bucket for cover images (public read) ----------
 insert into storage.buckets (id, name, public)

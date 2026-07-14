@@ -55,6 +55,8 @@ export default async function ReadingPage({
       }}
       initialScrollFraction={isThisChapter ? Number(progress?.scroll_fraction ?? 0) : 0}
       initialPage={isThisChapter ? progress?.page ?? 1 : 1}
+      currentUserId={user.id}
+      isAdmin={user.role === "admin"}
     />
   );
 }

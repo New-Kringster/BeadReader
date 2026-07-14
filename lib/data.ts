@@ -352,6 +352,72 @@ export async function resolveResumeChapter(
   return { chapterId: target.id, title: target.title, resuming: Boolean(last) };
 }
 
+// ============================================================
+// Comments
+// ============================================================
+export interface CommentRow {
+  id: string;
+  body: string;
+  created_at: string;
+  user_id: string;
+  author_name: string;
+  author_is_admin: boolean;
+}
+
+export async function listComments(chapterId: string): Promise<CommentRow[]> {
+  const { data } = await supabaseAdmin
+    .from("comments")
+    .select("id, body, created_at, user_id, users(name, role)")
+    .eq("chapter_id", chapterId)
+    .order("created_at", { ascending: true });
+  return (data ?? []).map((c) => {
+    const u = c.users as { name?: string; role?: string } | null;
+    return {
+      id: c.id as string,
+      body: c.body as string,
+      created_at: c.created_at as string,
+      user_id: c.user_id as string,
+      author_name: u?.name ?? "Someone",
+      author_is_admin: u?.role === "admin",
+    };
+  });
+}
+
+export async function addComment(
+  userId: string,
+  chapterId: string,
+  body: string
+): Promise<CommentRow> {
+  const { data, error } = await supabaseAdmin
+    .from("comments")
+    .insert({ user_id: userId, chapter_id: chapterId, body })
+    .select("id, body, created_at, user_id, users(name, role)")
+    .single();
+  if (error) throw error;
+  const u = data.users as { name?: string; role?: string } | null;
+  return {
+    id: data.id as string,
+    body: data.body as string,
+    created_at: data.created_at as string,
+    user_id: data.user_id as string,
+    author_name: u?.name ?? "Someone",
+    author_is_admin: u?.role === "admin",
+  };
+}
+
+/** Deletes a comment if the requester owns it or is an admin. */
+export async function deleteComment(commentId: string, user: User): Promise<boolean> {
+  const { data } = await supabaseAdmin
+    .from("comments")
+    .select("user_id")
+    .eq("id", commentId)
+    .maybeSingle();
+  if (!data) return false;
+  if (user.role !== "admin" && data.user_id !== user.id) return false;
+  await supabaseAdmin.from("comments").delete().eq("id", commentId);
+  return true;
+}
+
 /** For the admin per-reader view: where each reader is + total time, per book. */
 export async function getReaderActivity(userId: string) {
   const [{ data: progress }, { data: time }] = await Promise.all([

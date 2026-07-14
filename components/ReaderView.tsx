@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import MarkdownView from "@/components/MarkdownView";
+import ChapterComments from "@/components/ChapterComments";
 import type { Layout } from "@/lib/types";
 
 interface NavChapter {
@@ -54,6 +55,8 @@ export default function ReaderView({
   initialSettings,
   initialScrollFraction,
   initialPage,
+  currentUserId,
+  isAdmin,
 }: {
   bookId: string;
   bookTitle: string;
@@ -66,11 +69,14 @@ export default function ReaderView({
   initialSettings: Settings;
   initialScrollFraction: number;
   initialPage: number;
+  currentUserId: string;
+  isAdmin: boolean;
 }) {
   const router = useRouter();
   const [settings, setSettings] = useState<Settings>(initialSettings);
   const [showSettings, setShowSettings] = useState(false);
   const [showToc, setShowToc] = useState(false);
+  const [showComments, setShowComments] = useState(false);
   const [chrome, setChrome] = useState(true); // show top/bottom bars
 
   // Page mode
@@ -302,6 +308,11 @@ export default function ReaderView({
           <button className="reader-icon" onClick={() => setShowToc(true)} title="Contents">
             ☰
           </button>
+          {settings.layout === "page" && (
+            <button className="reader-icon" onClick={() => setShowComments(true)} title="Comments">
+              💬
+            </button>
+          )}
           <button className="reader-icon" onClick={() => setShowSettings(true)} title="Display settings">
             Aa
           </button>
@@ -325,8 +336,8 @@ export default function ReaderView({
               <div className="mt-12 pt-6 border-t" style={{ borderColor: "color-mix(in oklab, currentColor 18%, transparent)" }}>
                 {next ? (
                   <button
-                    className="btn"
-                    style={barStyle}
+                    className="btn max-w-full text-left"
+                    style={{ ...barStyle, whiteSpace: "normal", height: "auto" }}
                     onClick={(e) => {
                       e.stopPropagation();
                       goTo(next.id);
@@ -337,6 +348,18 @@ export default function ReaderView({
                 ) : (
                   <p className="opacity-60 text-sm">You&apos;ve reached the end of this book.</p>
                 )}
+              </div>
+
+              <div
+                className="mt-10 pt-8 border-t"
+                style={{ borderColor: "color-mix(in oklab, currentColor 18%, transparent)" }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <ChapterComments
+                  chapterId={chapter.id}
+                  currentUserId={currentUserId}
+                  isAdmin={isAdmin}
+                />
               </div>
             </article>
           </div>
@@ -531,6 +554,15 @@ export default function ReaderView({
               </li>
             ))}
           </ol>
+        </Drawer>
+      )}
+
+      {/* Comments drawer (used in page mode) */}
+      {showComments && (
+        <Drawer title="Comments" onClose={() => setShowComments(false)}>
+          <div className="text-ink">
+            <ChapterComments chapterId={chapter.id} currentUserId={currentUserId} isAdmin={isAdmin} />
+          </div>
         </Drawer>
       )}
     </div>

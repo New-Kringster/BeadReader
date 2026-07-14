@@ -7,6 +7,7 @@ import {
   resolveResumeChapter,
 } from "@/lib/data";
 import ReaderNav from "@/components/ReaderNav";
+import Logo from "@/components/Logo";
 
 export default async function BookTocPage({
   params,
@@ -31,7 +32,7 @@ export default async function BookTocPage({
               // eslint-disable-next-line @next/next/no-img-element
               <img src={book.cover_url} alt="" className="w-full h-full object-cover" />
             ) : (
-              <span className="text-3xl">📗</span>
+              <Logo size={40} className="opacity-40" />
             )}
           </div>
           <div>
