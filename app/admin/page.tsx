@@ -27,7 +27,7 @@ export default async function AdminDashboard() {
             <Link
               key={book.id}
               href={`/admin/books/${book.id}`}
-              className="card p-4 flex items-center gap-4 hover:border-accent transition-colors"
+              className="card p-4 flex items-center gap-4 min-w-0 hover:border-accent transition-colors"
             >
               <div className="w-12 h-16 rounded bg-line shrink-0 overflow-hidden flex items-center justify-center text-muted">
                 {book.cover_url ? (
@@ -38,16 +38,16 @@ export default async function AdminDashboard() {
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 min-w-0">
                   <span className="font-semibold truncate">{book.title}</span>
-                  <span className={`badge badge-${book.status}`}>{book.status}</span>
+                  <span className={`badge badge-${book.status} shrink-0`}>{book.status}</span>
                 </div>
                 <div className="text-sm text-muted truncate">
                   {book.author || "Unknown author"} · {counts[i]} chapter
                   {counts[i] === 1 ? "" : "s"}
                 </div>
               </div>
-              <span className="text-muted text-sm">Edit →</span>
+              <span className="text-muted text-sm shrink-0 hidden sm:inline">Edit →</span>
             </Link>
           ))}
         </div>

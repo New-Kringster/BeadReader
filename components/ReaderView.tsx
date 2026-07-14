@@ -26,6 +26,7 @@ const BG_PRESETS = [
 
 const IDLE_MS = 120_000; // 2 min without any interaction => reader is idle, stop counting
 const FLUSH_MS = 15_000; // push accumulated reading time this often
+const PAGE_GAP = 48; // px gap between "pages" in paginated mode (also prevents column bleed)
 
 function postJSON(url: string, data: unknown, beacon = false) {
   const body = JSON.stringify(data);
@@ -79,6 +80,7 @@ export default function ReaderView({
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
   const colsRef = useRef<HTMLDivElement>(null);
 
   // ---- reading-time tracking (active seconds) ----
@@ -181,24 +183,32 @@ export default function ReaderView({
   }, [settings.layout, settings.font_size, initialScrollFraction, saveProgress]);
 
   // ---- PAGE MODE: measure + paginate ----
+  // The column width is the wrapper's content width; each page shows exactly one
+  // column and we translate by that width. We set the width first, then measure
+  // scrollWidth on the next frame (once the browser has re-laid-out the columns).
   const recomputePages = useCallback(() => {
     const cols = colsRef.current;
-    const vp = viewportRef.current;
-    if (!cols || !vp) return;
-    const w = vp.clientWidth;
+    if (!cols) return;
+    const w = cols.clientWidth;
+    if (w <= 0) return;
     setColWidth(w);
-    // scrollWidth spans all columns; each page is one column of width w.
-    const count = Math.max(1, Math.round(cols.scrollWidth / w));
-    setPageCount(count);
-    setPage((p) => Math.min(Math.max(1, p), count));
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const el = colsRef.current;
+        if (!el) return;
+        // scrollWidth = n*w + (n-1)*gap  =>  n = (scrollWidth + gap) / (w + gap)
+        const count = Math.max(1, Math.round((el.scrollWidth + PAGE_GAP) / (w + PAGE_GAP)));
+        setPageCount(count);
+        setPage((p) => Math.min(Math.max(1, p), count));
+      });
+    });
   }, []);
 
   useEffect(() => {
     if (settings.layout !== "page") return;
-    // Let the column layout settle, then measure.
     const raf = requestAnimationFrame(recomputePages);
     const ro = new ResizeObserver(recomputePages);
-    if (viewportRef.current) ro.observe(viewportRef.current);
+    if (wrapRef.current) ro.observe(wrapRef.current);
     window.addEventListener("resize", recomputePages);
     return () => {
       cancelAnimationFrame(raf);
@@ -284,11 +294,11 @@ export default function ReaderView({
         }`}
         style={barStyle}
       >
-        <Link href={`/read/${bookId}`} className="hover:underline" title="Back to contents">
+        <Link href={`/read/${bookId}`} className="hover:underline min-w-0 truncate shrink" title="Back to contents">
           ← {bookTitle}
         </Link>
         <span className="opacity-60 truncate hidden sm:inline">/ {chapter.title}</span>
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex items-center gap-1 shrink-0">
           <button className="reader-icon" onClick={() => setShowToc(true)} title="Contents">
             ☰
           </button>
@@ -331,24 +341,30 @@ export default function ReaderView({
             </article>
           </div>
         ) : (
-          <div ref={viewportRef} className="absolute inset-0 overflow-hidden px-8 py-10">
+          <div ref={viewportRef} className="absolute inset-0 overflow-hidden py-10">
+            {/* Clip box is exactly one column wide and centered; the gap between
+                columns keeps the next page fully off-screen (no bleed). */}
             <div
-              ref={colsRef}
-              className="reader-content h-full"
-              style={{
-                columnWidth: colWidth ? `${colWidth}px` : undefined,
-                columnGap: 0,
-                columnFill: "auto",
-                fontFamily: "var(--font-serif)",
-                fontSize: `${settings.font_size}px`,
-                transform: `translateX(-${(page - 1) * colWidth}px)`,
-                transition: "transform 0.2s ease",
-                maxWidth: "42rem",
-                margin: "0 auto",
-              }}
+              ref={wrapRef}
+              className="h-full mx-auto overflow-hidden"
+              style={{ width: "calc(100% - 3rem)", maxWidth: "40rem" }}
             >
-              <h1 style={{ marginTop: 0 }}>{chapter.title}</h1>
-              <MarkdownView source={chapter.content} />
+              <div
+                ref={colsRef}
+                className="reader-content h-full"
+                style={{
+                  columnWidth: colWidth ? `${colWidth}px` : undefined,
+                  columnGap: `${PAGE_GAP}px`,
+                  columnFill: "auto",
+                  fontFamily: "var(--font-serif)",
+                  fontSize: `${settings.font_size}px`,
+                  transform: `translateX(-${(page - 1) * (colWidth + PAGE_GAP)}px)`,
+                  transition: "transform 0.2s ease",
+                }}
+              >
+                <h1 style={{ marginTop: 0 }}>{chapter.title}</h1>
+                <MarkdownView source={chapter.content} />
+              </div>
             </div>
           </div>
         )}

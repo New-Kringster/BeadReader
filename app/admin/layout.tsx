@@ -9,22 +9,33 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <div className="flex-1 flex flex-col">
       <header className="border-b border-line bg-panel">
-        <div className="mx-auto max-w-5xl px-4 h-14 flex items-center gap-5">
-          <Link href="/admin" className="font-bold text-lg" style={{ fontFamily: "var(--font-serif)" }}>
+        <div className="mx-auto max-w-5xl px-4 h-14 flex items-center gap-3 sm:gap-5">
+          <Link
+            href="/admin"
+            className="font-bold text-lg shrink-0"
+            style={{ fontFamily: "var(--font-serif)" }}
+          >
             📖 BeadReader
           </Link>
-          <span className="badge badge-published">Admin</span>
-          <nav className="flex items-center gap-4 text-sm ml-2">
+          <span className="badge badge-published hidden sm:inline-flex">Admin</span>
+          {/* Desktop inline nav */}
+          <nav className="hidden sm:flex items-center gap-4 text-sm ml-2">
             <Link href="/admin" className="hover:underline">Books</Link>
             <Link href="/admin/readers" className="hover:underline">Readers</Link>
             <Link href="/read" className="hover:underline text-muted">View as reader ↗</Link>
           </nav>
-          <div className="ml-auto flex items-center gap-3">
-            <span className="text-sm text-muted hidden sm:inline">{admin.name}</span>
+          <div className="ml-auto flex items-center gap-2 sm:gap-3 shrink-0">
+            <span className="text-sm text-muted hidden md:inline">{admin.name}</span>
             <ThemeToggle />
             <LogoutButton />
           </div>
         </div>
+        {/* Mobile nav row */}
+        <nav className="sm:hidden flex items-center gap-5 px-4 pb-2 -mt-1 text-sm border-t border-line pt-2">
+          <Link href="/admin" className="hover:underline">Books</Link>
+          <Link href="/admin/readers" className="hover:underline">Readers</Link>
+          <Link href="/read" className="hover:underline text-muted">View as reader ↗</Link>
+        </nav>
       </header>
       <main className="mx-auto max-w-5xl w-full px-4 py-8 flex-1">{children}</main>
     </div>
