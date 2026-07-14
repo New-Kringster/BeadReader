@@ -1,4 +1,5 @@
 import type { Book } from "@/lib/types";
+import CoverField from "@/components/CoverField";
 
 /** Server-rendered book form. `action` is a (bound) Server Action. */
 export default function BookForm({
@@ -33,16 +34,7 @@ export default function BookForm({
         />
       </div>
 
-      <div>
-        <label htmlFor="cover" className="label">Cover image {book ? "(leave empty to keep current)" : "(optional)"}</label>
-        {book?.cover_url && (
-          <div className="mb-2">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={book.cover_url} alt="Current cover" className="w-24 h-32 object-cover rounded border border-line" />
-          </div>
-        )}
-        <input id="cover" name="cover" type="file" accept="image/*" className="field" />
-      </div>
+      <CoverField currentUrl={book?.cover_url} />
 
       <div>
         <label htmlFor="status" className="label">Status</label>
