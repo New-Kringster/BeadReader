@@ -1,26 +1,162 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #f7f6f3;
+  --panel: #ffffff;
+  --ink: #23201b;
+  --muted: #6b675f;
+  --line: #e6e2da;
+  --accent: #8a5a2b;
+  --accent-ink: #ffffff;
+  --danger: #b4341f;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* Dark theme — applied when the user picks it, or by system preference when
+   they haven't chosen. ReaderView uses its own per-user colors and is unaffected. */
+:root[data-theme="dark"] {
+  --bg: #16140f;
+  --panel: #211d17;
+  --ink: #ece7dd;
+  --muted: #9c948a;
+  --line: #332e27;
+  --accent: #cf9155;
+  --accent-ink: #1b1610;
+  --danger: #e58c78;
 }
-
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  :root:not([data-theme="light"]) {
+    --bg: #16140f;
+    --panel: #211d17;
+    --ink: #ece7dd;
+    --muted: #9c948a;
+    --line: #332e27;
+    --accent: #cf9155;
+    --accent-ink: #1b1610;
+    --danger: #e58c78;
   }
 }
 
+@theme inline {
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-serif: Georgia, "Iowan Old Style", "Times New Roman", serif;
+}
+
+html,
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---- small reusable component classes ---- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: 0.6rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, opacity 0.12s;
+  text-decoration: none;
+}
+.btn:hover { background: color-mix(in oklab, var(--ink) 8%, var(--panel)); }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.btn-primary:hover { filter: brightness(0.93); background: var(--accent); }
+.btn-danger {
+  color: var(--danger);
+  border-color: color-mix(in oklab, var(--danger) 40%, transparent);
+  background: color-mix(in oklab, var(--danger) 12%, transparent);
+}
+.btn-danger:hover { background: color-mix(in oklab, var(--danger) 20%, transparent); }
+.btn-sm { padding: 0.3rem 0.6rem; font-size: 0.8rem; }
+
+.field {
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.6rem;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 0.95rem;
+}
+.field:focus { outline: 2px solid color-mix(in oklab, var(--accent) 45%, transparent); outline-offset: 1px; }
+.label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--muted); margin-bottom: 0.3rem; }
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+}
+
+.badge {
+  display: inline-flex; align-items: center; gap: 0.25rem;
+  padding: 0.1rem 0.5rem; border-radius: 999px;
+  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.02em;
+}
+.badge-draft { background: color-mix(in oklab, var(--ink) 10%, transparent); color: var(--muted); }
+.badge-published { background: color-mix(in oklab, #3f9d54 20%, transparent); color: color-mix(in oklab, #3f9d54 65%, var(--ink)); }
+.badge-spicy { background: color-mix(in oklab, #d24d78 20%, transparent); color: color-mix(in oklab, #d24d78 70%, var(--ink)); }
+
+/* icon button used in the immersive reader bars (inherits reader colors) */
+.reader-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 2rem; height: 2rem; padding: 0 0.5rem;
+  border-radius: 0.5rem; font-weight: 700; cursor: pointer;
+  border: 1px solid color-mix(in oklab, currentColor 22%, transparent);
+  background: transparent; color: inherit;
+}
+.reader-icon:hover { background: color-mix(in oklab, currentColor 12%, transparent); }
+
+/* ---- rendered markdown (reader + preview) ---- */
+.reader-content { line-height: 1.75; }
+.reader-content > * + * { margin-top: 1.1em; }
+.reader-content h1 { font-size: 1.7em; font-weight: 700; line-height: 1.25; margin-top: 1.6em; }
+.reader-content h2 { font-size: 1.4em; font-weight: 700; line-height: 1.3; margin-top: 1.5em; }
+.reader-content h3 { font-size: 1.18em; font-weight: 700; margin-top: 1.4em; }
+.reader-content a { text-decoration: underline; text-underline-offset: 2px; }
+.reader-content ul { list-style: disc; padding-left: 1.4em; }
+.reader-content ol { list-style: decimal; padding-left: 1.4em; }
+.reader-content li + li { margin-top: 0.35em; }
+.reader-content blockquote {
+  border-left: 3px solid currentColor;
+  padding-left: 1em; opacity: 0.85; font-style: italic;
+}
+.reader-content hr { border: none; border-top: 1px solid currentColor; opacity: 0.25; margin: 2em 0; }
+.reader-content code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.88em; padding: 0.1em 0.35em; border-radius: 0.3em;
+  background: color-mix(in oklab, currentColor 12%, transparent);
+}
+.reader-content pre {
+  padding: 1em; border-radius: 0.6em; overflow-x: auto;
+  background: color-mix(in oklab, currentColor 10%, transparent);
+}
+.reader-content pre code { background: none; padding: 0; }
+.reader-content img { max-width: 100%; border-radius: 0.5em; }
+.reader-content table { border-collapse: collapse; width: 100%; }
+.reader-content th, .reader-content td {
+  border: 1px solid color-mix(in oklab, currentColor 25%, transparent);
+  padding: 0.4em 0.6em; text-align: left;
 }

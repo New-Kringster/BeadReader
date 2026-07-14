@@ -1,0 +1,374 @@
+import "server-only";
+import { supabaseAdmin } from "./supabase";
+import { generateAccessCode } from "./codes";
+import {
+  DEFAULT_SETTINGS,
+  type Book,
+  type Chapter,
+  type ReaderSettings,
+  type ReadingProgress,
+  type User,
+} from "./types";
+
+// ============================================================
+// Books
+// ============================================================
+export async function listAllBooks(): Promise<Book[]> {
+  const { data } = await supabaseAdmin
+    .from("books")
+    .select("*")
+    .order("updated_at", { ascending: false });
+  return (data ?? []) as Book[];
+}
+
+export async function listPublishedBooks(): Promise<Book[]> {
+  const { data } = await supabaseAdmin
+    .from("books")
+    .select("*")
+    .eq("status", "published")
+    .order("title");
+  return (data ?? []) as Book[];
+}
+
+export async function getBook(id: string): Promise<Book | null> {
+  const { data } = await supabaseAdmin.from("books").select("*").eq("id", id).maybeSingle();
+  return (data as Book) ?? null;
+}
+
+/** A published book, for readers. Drafts are invisible. */
+export async function getPublishedBook(id: string): Promise<Book | null> {
+  const { data } = await supabaseAdmin
+    .from("books")
+    .select("*")
+    .eq("id", id)
+    .eq("status", "published")
+    .maybeSingle();
+  return (data as Book) ?? null;
+}
+
+export async function createBook(fields: Partial<Book>): Promise<Book> {
+  const { data, error } = await supabaseAdmin
+    .from("books")
+    .insert({
+      title: fields.title ?? "Untitled",
+      author: fields.author ?? null,
+      description: fields.description ?? null,
+      cover_url: fields.cover_url ?? null,
+      status: fields.status ?? "draft",
+    })
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as Book;
+}
+
+export async function updateBook(id: string, fields: Partial<Book>): Promise<void> {
+  const { error } = await supabaseAdmin.from("books").update(fields).eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteBook(id: string): Promise<void> {
+  await supabaseAdmin.from("books").delete().eq("id", id);
+}
+
+// ============================================================
+// Chapters
+// ============================================================
+export async function listChapters(bookId: string): Promise<Chapter[]> {
+  const { data } = await supabaseAdmin
+    .from("chapters")
+    .select("*")
+    .eq("book_id", bookId)
+    .order("position", { ascending: true });
+  return (data ?? []) as Chapter[];
+}
+
+/**
+ * The explicit-content gate. For readers we return only PUBLISHED chapters, and
+ * gated ("spicy") chapters are excluded IN THE QUERY unless the user has access —
+ * so a reader without access never receives them in the response at all.
+ */
+export async function listReadableChapters(
+  bookId: string,
+  user: Pick<User, "role" | "has_explicit_access">
+): Promise<Chapter[]> {
+  if (user.role === "admin") return listChapters(bookId);
+
+  let query = supabaseAdmin
+    .from("chapters")
+    .select("*")
+    .eq("book_id", bookId)
+    .eq("status", "published")
+    .order("position", { ascending: true });
+
+  if (!user.has_explicit_access) query = query.eq("is_explicit", false);
+
+  const { data } = await query;
+  return (data ?? []) as Chapter[];
+}
+
+export async function getChapter(id: string): Promise<Chapter | null> {
+  const { data } = await supabaseAdmin.from("chapters").select("*").eq("id", id).maybeSingle();
+  return (data as Chapter) ?? null;
+}
+
+/**
+ * A single chapter a reader is allowed to open. The gate lives in the query:
+ * the chapter must be published, its book must be published, and if it's gated
+ * the user must have explicit access — otherwise this returns null.
+ */
+export async function getReadableChapter(
+  chapterId: string,
+  user: Pick<User, "role" | "has_explicit_access">
+): Promise<Chapter | null> {
+  if (user.role === "admin") return getChapter(chapterId);
+
+  let query = supabaseAdmin
+    .from("chapters")
+    .select("*, books!inner(status)")
+    .eq("id", chapterId)
+    .eq("status", "published")
+    .eq("books.status", "published");
+
+  if (!user.has_explicit_access) query = query.eq("is_explicit", false);
+
+  const { data } = await query.maybeSingle();
+  if (!data) return null;
+  const { books: _book, ...chapter } = data as Chapter & { books: unknown };
+  return chapter as Chapter;
+}
+
+async function nextPosition(bookId: string): Promise<number> {
+  const { data } = await supabaseAdmin
+    .from("chapters")
+    .select("position")
+    .eq("book_id", bookId)
+    .order("position", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data ? (data.position as number) + 1 : 0;
+}
+
+export async function createChapter(bookId: string, fields: Partial<Chapter>): Promise<Chapter> {
+  const { data, error } = await supabaseAdmin
+    .from("chapters")
+    .insert({
+      book_id: bookId,
+      title: fields.title ?? "Untitled chapter",
+      content: fields.content ?? "",
+      status: fields.status ?? "draft",
+      is_explicit: fields.is_explicit ?? false,
+      position: fields.position ?? (await nextPosition(bookId)),
+    })
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as Chapter;
+}
+
+export async function updateChapter(id: string, fields: Partial<Chapter>): Promise<void> {
+  const { error } = await supabaseAdmin.from("chapters").update(fields).eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteChapter(id: string): Promise<void> {
+  await supabaseAdmin.from("chapters").delete().eq("id", id);
+}
+
+/** Persist a new chapter order (array of chapter ids in the desired order). */
+export async function reorderChapters(bookId: string, orderedIds: string[]): Promise<void> {
+  await Promise.all(
+    orderedIds.map((id, index) =>
+      supabaseAdmin.from("chapters").update({ position: index }).eq("id", id).eq("book_id", bookId)
+    )
+  );
+}
+
+// ============================================================
+// Readers / users
+// ============================================================
+export async function getUserByAccessCode(code: string): Promise<User | null> {
+  const { data } = await supabaseAdmin
+    .from("users")
+    .select("*")
+    .eq("access_code", code.trim())
+    .maybeSingle();
+  return (data as User) ?? null;
+}
+
+export async function listReaders(): Promise<User[]> {
+  const { data } = await supabaseAdmin
+    .from("users")
+    .select("*")
+    .eq("role", "reader")
+    .order("created_at", { ascending: false });
+  return (data ?? []) as User[];
+}
+
+export async function createReader(name: string): Promise<User> {
+  // Retry until we land a unique code (collisions are astronomically unlikely).
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const { data, error } = await supabaseAdmin
+      .from("users")
+      .insert({ name: name.trim() || "Reader", role: "reader", access_code: generateAccessCode() })
+      .select("*")
+      .single();
+    if (!error) return data as User;
+    if (error.code !== "23505") throw error; // 23505 = unique violation
+  }
+  throw new Error("Could not generate a unique access code, please try again.");
+}
+
+export async function regenerateCode(userId: string): Promise<string> {
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const code = generateAccessCode();
+    const { error } = await supabaseAdmin
+      .from("users")
+      .update({ access_code: code })
+      .eq("id", userId);
+    if (!error) return code;
+    if (error.code !== "23505") throw error;
+  }
+  throw new Error("Could not generate a unique access code, please try again.");
+}
+
+export async function setReaderRevoked(userId: string, revoked: boolean): Promise<void> {
+  await supabaseAdmin.from("users").update({ revoked }).eq("id", userId).eq("role", "reader");
+}
+
+export async function setReaderExplicit(userId: string, hasAccess: boolean): Promise<void> {
+  await supabaseAdmin
+    .from("users")
+    .update({ has_explicit_access: hasAccess })
+    .eq("id", userId)
+    .eq("role", "reader");
+}
+
+export async function deleteReader(userId: string): Promise<void> {
+  await supabaseAdmin.from("users").delete().eq("id", userId).eq("role", "reader");
+}
+
+// ============================================================
+// Reader settings
+// ============================================================
+export async function getSettings(userId: string): Promise<ReaderSettings> {
+  const { data } = await supabaseAdmin
+    .from("reader_settings")
+    .select("*")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (data) return data as ReaderSettings;
+  return { user_id: userId, updated_at: new Date(0).toISOString(), ...DEFAULT_SETTINGS };
+}
+
+export async function saveSettings(
+  userId: string,
+  settings: Partial<Omit<ReaderSettings, "user_id" | "updated_at">>
+): Promise<void> {
+  await supabaseAdmin
+    .from("reader_settings")
+    .upsert({ user_id: userId, ...settings, updated_at: new Date().toISOString() });
+}
+
+// ============================================================
+// Reading progress & time
+// ============================================================
+export async function getProgress(userId: string, bookId: string): Promise<ReadingProgress | null> {
+  const { data } = await supabaseAdmin
+    .from("reading_progress")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("book_id", bookId)
+    .maybeSingle();
+  return (data as ReadingProgress) ?? null;
+}
+
+export async function saveProgress(
+  userId: string,
+  bookId: string,
+  chapterId: string,
+  scrollFraction: number,
+  page: number
+): Promise<void> {
+  await supabaseAdmin.from("reading_progress").upsert({
+    user_id: userId,
+    book_id: bookId,
+    chapter_id: chapterId,
+    scroll_fraction: Math.min(1, Math.max(0, scrollFraction)),
+    page: Math.max(1, Math.round(page)),
+    updated_at: new Date().toISOString(),
+  });
+}
+
+export async function addReadingTime(
+  userId: string,
+  bookId: string,
+  seconds: number
+): Promise<void> {
+  const add = Math.max(0, Math.round(seconds));
+  if (add === 0) return;
+  const { data } = await supabaseAdmin
+    .from("reading_time")
+    .select("total_seconds")
+    .eq("user_id", userId)
+    .eq("book_id", bookId)
+    .maybeSingle();
+  const total = (data?.total_seconds ?? 0) + add;
+  await supabaseAdmin.from("reading_time").upsert({
+    user_id: userId,
+    book_id: bookId,
+    total_seconds: total,
+    updated_at: new Date().toISOString(),
+  });
+}
+
+export async function getReadingTime(userId: string, bookId: string): Promise<number> {
+  const { data } = await supabaseAdmin
+    .from("reading_time")
+    .select("total_seconds")
+    .eq("user_id", userId)
+    .eq("book_id", bookId)
+    .maybeSingle();
+  return data?.total_seconds ?? 0;
+}
+
+/**
+ * Which chapter to open when a reader taps a book (auto-resume). Returns the
+ * last-read chapter if it's still readable, else the first readable chapter,
+ * else null (nothing the reader may see). Only ever considers gated chapters.
+ */
+export async function resolveResumeChapter(
+  user: Pick<User, "role" | "has_explicit_access">,
+  bookId: string,
+  userId: string
+): Promise<{ chapterId: string; title: string; resuming: boolean } | null> {
+  const chapters = await listReadableChapters(bookId, user);
+  if (chapters.length === 0) return null;
+
+  const progress = await getProgress(userId, bookId);
+  const last =
+    progress?.chapter_id && chapters.find((c) => c.id === progress.chapter_id);
+  const target = last || chapters[0];
+  return { chapterId: target.id, title: target.title, resuming: Boolean(last) };
+}
+
+/** For the admin per-reader view: where each reader is + total time, per book. */
+export async function getReaderActivity(userId: string) {
+  const [{ data: progress }, { data: time }] = await Promise.all([
+    supabaseAdmin
+      .from("reading_progress")
+      .select("book_id, chapter_id, updated_at, books(title), chapters(title)")
+      .eq("user_id", userId)
+      .order("updated_at", { ascending: false }),
+    supabaseAdmin.from("reading_time").select("book_id, total_seconds").eq("user_id", userId),
+  ]);
+  const timeByBook = new Map<string, number>();
+  for (const row of time ?? []) timeByBook.set(row.book_id, row.total_seconds);
+  return (progress ?? []).map((p) => ({
+    bookId: p.book_id as string,
+    bookTitle: (p.books as { title?: string } | null)?.title ?? "—",
+    chapterTitle: (p.chapters as { title?: string } | null)?.title ?? "—",
+    updatedAt: p.updated_at as string,
+    totalSeconds: timeByBook.get(p.book_id as string) ?? 0,
+  }));
+}
