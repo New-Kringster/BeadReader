@@ -187,6 +187,17 @@ select {
 }
 .reader-content pre code { background: none; padding: 0; }
 .reader-content img { max-width: 100%; border-radius: 0.5em; }
+/* In-place redaction placeholder shown to readers without explicit access.
+   Uses currentColor so it adapts to the reader's custom text colour. */
+.spicy-redacted {
+  display: flex; align-items: center; justify-content: center; gap: 0.5em;
+  text-align: center; font-size: 0.82em; font-weight: 600;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 0.85em 1em; border-radius: 0.5em;
+  opacity: 0.72;
+  border: 1px dashed color-mix(in oklab, currentColor 35%, transparent);
+  background: color-mix(in oklab, currentColor 7%, transparent);
+}
 .reader-content table { border-collapse: collapse; width: 100%; }
 .reader-content th, .reader-content td {
   border: 1px solid color-mix(in oklab, currentColor 25%, transparent);

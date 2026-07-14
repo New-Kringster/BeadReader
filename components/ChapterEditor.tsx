@@ -1,7 +1,8 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import MarkdownView from "@/components/MarkdownView";
 import SubmitButton from "@/components/SubmitButton";
+import { revealSpicy, redactSpicy, hasSpicy } from "@/lib/redact";
 import type { Chapter } from "@/lib/types";
 
 export default function ChapterEditor({
@@ -16,6 +17,28 @@ export default function ChapterEditor({
   const [status, setStatus] = useState(chapter?.status ?? "draft");
   const [spicy, setSpicy] = useState(chapter?.is_explicit ?? false);
   const [tab, setTab] = useState<"write" | "preview">("write");
+  const [previewAs, setPreviewAs] = useState<"full" | "redacted">("full");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const previewSource = previewAs === "full" ? revealSpicy(content) : redactSpicy(content);
+  const anySpicy = hasSpicy(content);
+
+  /** Wrap the current textarea selection in [[spicy]] … [[/spicy]] markers. */
+  function markSpicy() {
+    const el = textareaRef.current;
+    if (!el) return;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const selected = content.slice(start, end);
+    const next = `${content.slice(0, start)}[[spicy]]${selected}[[/spicy]]${content.slice(end)}`;
+    setContent(next);
+    // Restore focus and place the caret just inside the closing marker.
+    requestAnimationFrame(() => {
+      el.focus();
+      const caret = start + "[[spicy]]".length + selected.length;
+      el.setSelectionRange(caret, caret);
+    });
+  }
 
   return (
     <form action={action} className="space-y-4">
@@ -61,12 +84,24 @@ export default function ChapterEditor({
             checked={spicy}
             onChange={(e) => setSpicy(e.target.checked)}
           />
-          🌶 Explicit (spicy) — hidden from readers without access
+          🌶 Hide entire chapter from readers without access
         </label>
 
         <div className="ml-auto">
           <SubmitButton>{chapter ? "Save chapter" : "Create chapter"}</SubmitButton>
         </div>
+      </div>
+
+      {/* Inline-redaction helper */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted">
+        <button type="button" className="btn btn-sm" onClick={markSpicy}>
+          🌶 Mark selection spicy
+        </button>
+        <span>
+          Wraps the selected text in{" "}
+          <code className="bg-line/60 px-1 rounded">[[spicy]]…[[/spicy]]</code>. Readers
+          without access see a redaction block in its place; the chapter stays readable.
+        </span>
       </div>
 
       {/* Mobile tab switch */}
@@ -92,6 +127,7 @@ export default function ChapterEditor({
         <div className={tab === "preview" ? "hidden md:block" : ""}>
           <div className="label">Markdown</div>
           <textarea
+            ref={textareaRef}
             name="content"
             value={content}
             onChange={(e) => setContent(e.target.value)}
@@ -102,13 +138,33 @@ export default function ChapterEditor({
           />
         </div>
         <div className={tab === "write" ? "hidden md:block" : ""}>
-          <div className="label">Preview</div>
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <div className="label mb-0">Preview</div>
+            {anySpicy && (
+              <div className="flex gap-1" role="group" aria-label="Preview audience">
+                <button
+                  type="button"
+                  className={`btn btn-sm ${previewAs === "full" ? "btn-primary" : ""}`}
+                  onClick={() => setPreviewAs("full")}
+                >
+                  Full
+                </button>
+                <button
+                  type="button"
+                  className={`btn btn-sm ${previewAs === "redacted" ? "btn-primary" : ""}`}
+                  onClick={() => setPreviewAs("redacted")}
+                >
+                  Redacted
+                </button>
+              </div>
+            )}
+          </div>
           <div
             className="card p-5 overflow-auto"
             style={{ minHeight: "60vh", maxHeight: "70vh", fontFamily: "var(--font-serif)" }}
           >
             {content.trim() ? (
-              <MarkdownView source={content} />
+              <MarkdownView source={previewSource} />
             ) : (
               <p className="text-muted text-sm">Nothing to preview yet.</p>
             )}

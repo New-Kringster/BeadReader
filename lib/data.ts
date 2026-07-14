@@ -1,6 +1,7 @@
 import "server-only";
 import { supabaseAdmin } from "./supabase";
 import { generateAccessCode } from "./codes";
+import { processChapterContent } from "./redact";
 import {
   DEFAULT_SETTINGS,
   type Book,
@@ -84,16 +85,38 @@ export async function listChapters(bookId: string): Promise<Chapter[]> {
   return (data ?? []) as Chapter[];
 }
 
+/** Whether this user may see spicy passages in full (vs. redacted). */
+function canSeeSpicy(user: Pick<User, "role" | "has_explicit_access">): boolean {
+  return user.role === "admin" || user.has_explicit_access;
+}
+
+/**
+ * Reveal or redact the inline `[[spicy]]` spans in a chapter's body for this
+ * reader. Runs server-side, so a reader without access never receives the
+ * explicit text — only the redaction placeholder. (This is separate from the
+ * whole-chapter `is_explicit` gate below.)
+ */
+function applyRedaction<T extends Pick<Chapter, "content">>(
+  chapter: T,
+  user: Pick<User, "role" | "has_explicit_access">
+): T {
+  return { ...chapter, content: processChapterContent(chapter.content, canSeeSpicy(user)) };
+}
+
 /**
  * The explicit-content gate. For readers we return only PUBLISHED chapters, and
- * gated ("spicy") chapters are excluded IN THE QUERY unless the user has access —
- * so a reader without access never receives them in the response at all.
+ * fully-hidden ("spicy") chapters are excluded IN THE QUERY unless the user has
+ * access — so a reader without access never receives them at all. Inline spicy
+ * passages in the remaining chapters are redacted here, server-side.
  */
 export async function listReadableChapters(
   bookId: string,
   user: Pick<User, "role" | "has_explicit_access">
 ): Promise<Chapter[]> {
-  if (user.role === "admin") return listChapters(bookId);
+  if (user.role === "admin") {
+    const chapters = await listChapters(bookId);
+    return chapters.map((c) => applyRedaction(c, user));
+  }
 
   let query = supabaseAdmin
     .from("chapters")
@@ -105,7 +128,7 @@ export async function listReadableChapters(
   if (!user.has_explicit_access) query = query.eq("is_explicit", false);
 
   const { data } = await query;
-  return (data ?? []) as Chapter[];
+  return ((data ?? []) as Chapter[]).map((c) => applyRedaction(c, user));
 }
 
 export async function getChapter(id: string): Promise<Chapter | null> {
@@ -122,7 +145,10 @@ export async function getReadableChapter(
   chapterId: string,
   user: Pick<User, "role" | "has_explicit_access">
 ): Promise<Chapter | null> {
-  if (user.role === "admin") return getChapter(chapterId);
+  if (user.role === "admin") {
+    const chapter = await getChapter(chapterId);
+    return chapter ? applyRedaction(chapter, user) : null;
+  }
 
   let query = supabaseAdmin
     .from("chapters")
@@ -135,8 +161,8 @@ export async function getReadableChapter(
 
   const { data } = await query.maybeSingle();
   if (!data) return null;
-  const { books: _book, ...chapter } = data as Chapter & { books: unknown };
-  return chapter as Chapter;
+  const { books: _book, ...rest } = data as Chapter & { books: unknown };
+  return applyRedaction(rest as Chapter, user);
 }
 
 async function nextPosition(bookId: string): Promise<number> {
