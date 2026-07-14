@@ -59,6 +59,15 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Safety net: text-entry controls default to 16px so iOS Safari never
+   auto-zooms on focus. Low specificity (element selector) so any explicit
+   font-size class — e.g. the login field's text-lg — still wins. */
+input,
+textarea,
+select {
+  font-size: 16px;
+}
+
 /* ---- small reusable component classes ---- */
 .btn {
   display: inline-flex;
@@ -100,7 +109,10 @@ body {
   border: 1px solid var(--line);
   background: var(--panel);
   color: var(--ink);
-  font-size: 0.95rem;
+  /* 16px: below this, iOS Safari auto-zooms into the field on focus and never
+     zooms back out, which makes the whole page look zoomed with a stray
+     horizontal scroll. Keep every text-entry control at >= 16px. */
+  font-size: 1rem;
 }
 .field:focus { outline: 2px solid color-mix(in oklab, var(--accent) 45%, transparent); outline-offset: 1px; }
 .label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--muted); margin-bottom: 0.3rem; }
@@ -144,7 +156,8 @@ body {
   width: 100%; padding: 0.6rem 0.7rem; border-radius: 0.5rem; color: inherit;
   background: color-mix(in oklab, currentColor 6%, transparent);
   border: 1px solid color-mix(in oklab, currentColor 25%, transparent);
-  font-family: var(--font-sans); font-size: 0.95rem;
+  /* 16px: see note on .field — anything smaller triggers iOS focus zoom. */
+  font-family: var(--font-sans); font-size: 1rem;
 }
 .reader-field:focus { outline: 2px solid color-mix(in oklab, currentColor 35%, transparent); outline-offset: 1px; }
 
