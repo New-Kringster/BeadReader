@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import {
+  getProgress,
   getPublishedBook,
   listReadableChapters,
   resolveResumeChapter,
@@ -20,7 +21,21 @@ export default async function BookTocPage({
   if (!book) notFound();
 
   const chapters = await listReadableChapters(bookId, user);
-  const resume = await resolveResumeChapter(user, bookId, user.id);
+  const [progress, resume] = await Promise.all([
+    getProgress(user.id, bookId),
+    resolveResumeChapter(user, bookId, user.id),
+  ]);
+
+  // The reader has a single stored position per book (current chapter + how far
+  // into it). Since chapters are ordered by position, everything before the
+  // current chapter is "read", the current chapter is in progress, and the rest
+  // are unread.
+  const currentIndex = progress?.chapter_id
+    ? chapters.findIndex((c) => c.id === progress.chapter_id)
+    : -1;
+  const currentPct = Math.round(
+    Math.min(1, Math.max(0, progress?.scroll_fraction ?? 0)) * 100
+  );
 
   return (
     <>
@@ -54,20 +69,60 @@ export default async function BookTocPage({
           <p className="text-muted text-sm">No chapters available yet.</p>
         ) : (
           <ol className="card divide-y divide-line">
-            {chapters.map((ch, i) => (
-              <li key={ch.id}>
-                <Link
-                  href={`/read/${bookId}/${ch.id}`}
-                  className="flex items-center gap-3 px-4 py-3 hover:bg-line/40"
-                >
-                  <span className="text-muted text-sm w-6 text-right tabular-nums">{i + 1}</span>
-                  <span className="flex-1" style={{ fontFamily: "var(--font-serif)" }}>
-                    {ch.title}
-                  </span>
-                  {ch.is_explicit && <span className="badge badge-spicy">🌶</span>}
-                </Link>
-              </li>
-            ))}
+            {chapters.map((ch, i) => {
+              const isRead = currentIndex >= 0 && i < currentIndex;
+              const isCurrent = i === currentIndex;
+              return (
+                <li key={ch.id}>
+                  <Link
+                    href={`/read/${bookId}/${ch.id}`}
+                    aria-current={isCurrent ? "true" : undefined}
+                    className={`flex items-center gap-3 px-4 py-3 hover:bg-line/40 ${
+                      isRead ? "opacity-55" : ""
+                    } ${isCurrent ? "bg-accent/8" : ""}`}
+                  >
+                    <span className="w-6 shrink-0 text-right text-sm text-muted tabular-nums">
+                      {isRead ? (
+                        <span className="text-accent" aria-label="Read" title="Read">
+                          ✓
+                        </span>
+                      ) : (
+                        i + 1
+                      )}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span
+                        className={`block truncate ${isCurrent ? "font-semibold" : ""}`}
+                        style={{ fontFamily: "var(--font-serif)" }}
+                      >
+                        {ch.title}
+                      </span>
+                      {isCurrent && (
+                        <span className="mt-1.5 flex items-center gap-2">
+                          <span className="h-1 flex-1 overflow-hidden rounded-full bg-line">
+                            <span
+                              className="block h-full rounded-full bg-accent"
+                              style={{ width: `${Math.max(currentPct, 4)}%` }}
+                            />
+                          </span>
+                          <span className="text-xs text-muted tabular-nums">
+                            {currentPct}%
+                          </span>
+                        </span>
+                      )}
+                    </span>
+                    {isCurrent && (
+                      <span className="badge badge-published shrink-0">Reading</span>
+                    )}
+                    {ch.is_explicit && (
+                      <span className="badge badge-spicy shrink-0" title="Spicy">
+                        🌶
+                      </span>
+                    )}
+                  </Link>
+                </li>
+              );
+            })}
           </ol>
         )}
       </main>
