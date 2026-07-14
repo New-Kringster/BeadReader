@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { formatDuration } from "@/lib/format";
 import ReaderNav from "@/components/ReaderNav";
+import ChangeCodeCard from "@/components/ChangeCodeCard";
 
 export default async function AccountPage() {
   const user = (await getCurrentUser())!;
@@ -46,6 +47,9 @@ export default async function AccountPage() {
             <div className="font-medium">{formatDuration(totalSeconds)}</div>
           </div>
         </div>
+
+        <h2 className="text-lg font-semibold mt-8 mb-3">Access code</h2>
+        <ChangeCodeCard currentCode={user.access_code} />
 
         <p className="text-sm text-muted mt-6">
           Reading colors, font size, and scroll/page layout are adjustable from the{" "}

@@ -232,6 +232,20 @@ export async function regenerateCode(userId: string): Promise<string> {
   throw new Error("Could not generate a unique access code, please try again.");
 }
 
+/** Set a specific (custom) access code for a user. Enforces uniqueness. */
+export async function setCustomAccessCode(
+  userId: string,
+  code: string
+): Promise<{ ok: boolean; error?: string }> {
+  const { error } = await supabaseAdmin
+    .from("users")
+    .update({ access_code: code.trim() })
+    .eq("id", userId);
+  if (error?.code === "23505") return { ok: false, error: "That code is already taken." };
+  if (error) throw error;
+  return { ok: true };
+}
+
 export async function setReaderRevoked(userId: string, revoked: boolean): Promise<void> {
   await supabaseAdmin.from("users").update({ revoked }).eq("id", userId).eq("role", "reader");
 }
