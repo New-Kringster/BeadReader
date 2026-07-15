@@ -29,16 +29,64 @@ export function hasSpicy(md: string): boolean {
   return md.includes(OPEN);
 }
 
+/** One run of the body: either ordinary prose or the inside of a spicy span. */
+export type SpicySegment = { spicy: boolean; text: string };
+
 /**
- * Full view: remove the markers, keep the enclosed text. Any stray/unbalanced
- * marker tokens are stripped too, so a typo never shows raw `[[spicy]]` to a
- * reader who is allowed to see everything.
+ * Cut a body into alternating plain/spicy runs so the renderer can fold the
+ * spicy ones away. Segment text is preserved exactly (no trimming); only truly
+ * empty segments are dropped, so adjacent spans don't emit a phantom plain run.
+ *
+ * Defensive in the same direction as redactSpicy, so both views agree on where
+ * a span is: an unclosed `[[spicy]]` runs spicy to end-of-string, and a stray
+ * `[[/spicy]]` is dropped from the surrounding prose.
+ *
+ * Idempotent with respect to revealSpicy: splitting a revealed string sees the
+ * same spans as splitting the raw one.
+ */
+export function splitSpicy(md: string): SpicySegment[] {
+  const out: SpicySegment[] = [];
+  const push = (spicy: boolean, text: string) => {
+    if (text) out.push({ spicy, text });
+  };
+
+  let rest = md;
+  for (;;) {
+    const open = rest.indexOf(OPEN);
+    if (open === -1) break;
+
+    push(false, rest.slice(0, open).split(CLOSE).join(""));
+
+    const after = rest.slice(open + OPEN.length);
+    const close = after.indexOf(CLOSE);
+    if (close === -1) {
+      // Unclosed marker: treat the remainder as spicy rather than leak it into
+      // the prose. redactSpicy makes the mirror-image choice.
+      push(true, after);
+      return out;
+    }
+    push(true, after.slice(0, close));
+    rest = after.slice(close + CLOSE.length);
+  }
+  push(false, rest.split(CLOSE).join(""));
+  return out;
+}
+
+/**
+ * Full view (admins & readers WITH access): the text, with balanced
+ * `[[spicy]] … [[/spicy]]` markers KEPT so the client can fold each passage
+ * behind a click. Strays are normalized — an unclosed `[[spicy]]` gets closed
+ * at end-of-string, a lone `[[/spicy]]` is removed — so a typo can never render
+ * as raw marker text.
+ *
+ * Keeping the markers is safe: this view is only ever built for readers already
+ * permitted to see the text it wraps. Readers without access get redactSpicy,
+ * server-side.
  */
 export function revealSpicy(md: string): string {
-  return md
-    .replace(SPAN, "$1")
-    .split(OPEN).join("")
-    .split(CLOSE).join("");
+  return splitSpicy(md)
+    .map((s) => (s.spicy ? `${OPEN}${s.text}${CLOSE}` : s.text))
+    .join("");
 }
 
 /**

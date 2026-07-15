@@ -9,6 +9,10 @@
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",
+    // node --test runs lib/*.test.ts directly via type stripping, which requires
+    // the explicit .ts extension on imports. Safe with noEmit: nothing rewrites
+    // these paths, and app code goes through the bundler as before.
+    "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "react-jsx",
