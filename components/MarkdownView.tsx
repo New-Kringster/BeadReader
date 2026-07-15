@@ -1,7 +1,10 @@
+"use client";
 import type { ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
+import type { Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { SPICY_REDACTED } from "@/lib/redact";
+import { SPICY_REDACTED, splitSpicy } from "@/lib/redact";
+import SpicyPassage from "@/components/SpicyPassage";
 
 /** Flatten react-markdown children down to their plain text. */
 function toText(children: ReactNode): string {
@@ -12,35 +15,56 @@ function toText(children: ReactNode): string {
   return "";
 }
 
+const COMPONENTS: Components = {
+  p({ children }) {
+    if (toText(children).trim() === SPICY_REDACTED) {
+      return (
+        <div className="spicy-redacted" role="note" aria-label="Spicy content hidden">
+          🌶 spicy content hidden
+        </div>
+      );
+    }
+    return <p>{children}</p>;
+  },
+};
+
+function Segment({ text }: { text: string }) {
+  return (
+    <ReactMarkdown remarkPlugins={[remarkGfm]} components={COMPONENTS}>
+      {text}
+    </ReactMarkdown>
+  );
+}
+
 /**
  * Renders Markdown to HTML. react-markdown does NOT render raw HTML embedded in
  * the source unless you add rehype-raw, so admin-authored Markdown is safe by
  * default. GFM adds tables, strikethrough, task lists, autolinks.
  *
- * A paragraph that is only the `[[spicy-redacted]]` sentinel (inserted server-side
- * by redactSpicy for readers without explicit access) is rendered as a labeled
- * redaction block instead of literal text.
+ * The body arrives in one of two shapes, decided server-side in lib/data.ts:
+ *
+ *  - reader WITH access: `[[spicy]]` markers intact. splitSpicy cuts them out
+ *    into their own segments, each folded behind a click by SpicyPassage.
+ *  - reader WITHOUT access: no explicit text at all, just `[[spicy-redacted]]`
+ *    sentinel paragraphs, rendered below as a labeled block.
+ *
+ * Each segment gets its own ReactMarkdown, so a Markdown construct cannot span a
+ * marker boundary (a list may not open outside a span and close inside it).
+ * Markers are scoped to whole passages, so this costs nothing in practice.
  */
 export default function MarkdownView({ source }: { source: string }) {
+  const segments = splitSpicy(source || "");
   return (
     <div className="reader-content">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{
-          p({ children }) {
-            if (toText(children).trim() === SPICY_REDACTED) {
-              return (
-                <div className="spicy-redacted" role="note" aria-label="Spicy content hidden">
-                  🌶 spicy content hidden
-                </div>
-              );
-            }
-            return <p>{children}</p>;
-          },
-        }}
-      >
-        {source || ""}
-      </ReactMarkdown>
+      {segments.map((seg, i) =>
+        seg.spicy ? (
+          <SpicyPassage key={i}>
+            <Segment text={seg.text} />
+          </SpicyPassage>
+        ) : (
+          <Segment key={i} text={seg.text} />
+        )
+      )}
     </div>
   );
 }
