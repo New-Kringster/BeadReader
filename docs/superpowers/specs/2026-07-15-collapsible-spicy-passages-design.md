@@ -95,9 +95,22 @@ Structure: an inner region holding the passage content, and the toggle button as
 its **sibling below** — never inside the masked region, or the mask would fade
 out its own control.
 
-Collapsed, the inner region gets `max-height: 7em`, `overflow: hidden`, and
+Collapsed, the inner region gets `max-height: min(7em, half the passage)`,
+`overflow: hidden`, and
 `mask-image: linear-gradient(to bottom, #000 45%, transparent)`. Expanded, all
 three are dropped and the region renders at natural height.
+
+The halving is not decoration. A passage shorter than 7em isn't clipped at all,
+so a flat clamp left it fully readable with only its last line faded — hiding
+nothing, which defeats the feature. `min(7em, half)` is one rule at every length
+and always leaves something to open. It needs a measurement, so the content sits
+in a further inner wrapper: the clipped box cannot report its own natural
+height. The CSS clamp stays as the pre-measurement default, so no frame ever
+paints an unfolded passage.
+
+The passage's blocks sit below `.reader-content`, so its `> * + *` spacing rule
+does not reach them. `.spicy-passage-inner > * + *` must restate it or the prose
+inside a passage loses all paragraph spacing.
 
 The mask is load-bearing. A gradient *overlay* would have to paint the reader's
 background color, and readers choose their own `bg_color` in settings — an
@@ -143,16 +156,15 @@ modified:
 
 ## Known trade-offs
 
-Both were accepted during design rather than solved:
-
-1. **Short passages.** A passage under 7em renders fully visible but fading —
-   the mask clips its last line, and "Show passage" reveals only that line. It
-   reads as a slight rendering oddity, not a leak. Fixing it properly means
-   measuring `scrollHeight` in a layout effect; ship without it and revisit only
-   if it looks wrong in practice.
+1. **Short passages** — *resolved during implementation, not shipped as a
+   trade-off.* Visual review showed a sub-7em passage sitting fully readable
+   with only its last line faded. That isn't cosmetic: the feature hid nothing.
+   Resolved by folding to `min(7em, half the passage)`; see the SpicyPassage
+   section above.
 2. **Paginated mode.** Expanding a passage reflows the CSS columns, shifting
    subsequent text across pages. Inherent to expanding content in a column
-   layout.
+   layout. Verified in the real reader: content reflows, nothing is clipped or
+   lost.
 
 ## Testing
 
