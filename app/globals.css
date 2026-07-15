@@ -198,6 +198,21 @@ select {
   border: 1px dashed color-mix(in oklab, currentColor 35%, transparent);
   background: color-mix(in oklab, currentColor 7%, transparent);
 }
+/* A spicy passage, folded away until the reader opens it. Sits on the reveal
+   path only; .spicy-redacted above is what readers without access get instead. */
+.spicy-passage { margin: 1.2em 0; }
+.spicy-passage-body > :first-child { margin-top: 0; }
+.spicy-passage[data-open="false"] .spicy-passage-body {
+  max-height: 7em;
+  overflow: hidden;
+  /* Fade to transparency, NOT to a background color. Readers pick their own
+     bg_color in settings, so a gradient overlay would have to be told that
+     color; a mask just lets the real background through. */
+  -webkit-mask-image: linear-gradient(to bottom, #000 45%, transparent);
+  mask-image: linear-gradient(to bottom, #000 45%, transparent);
+}
+.spicy-passage-toggle { margin-top: 0.4em; }
+
 .reader-content table { border-collapse: collapse; width: 100%; }
 .reader-content th, .reader-content td {
   border: 1px solid color-mix(in oklab, currentColor 25%, transparent);
