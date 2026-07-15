@@ -2,11 +2,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import {
+  getProgress,
   getPublishedBook,
   listReadableChapters,
+  listReadChapterIds,
   resolveResumeChapter,
 } from "@/lib/data";
 import ReaderNav from "@/components/ReaderNav";
+import ReaderChapterList from "@/components/ReaderChapterList";
 import Logo from "@/components/Logo";
 
 export default async function BookTocPage({
@@ -20,7 +23,19 @@ export default async function BookTocPage({
   if (!book) notFound();
 
   const chapters = await listReadableChapters(bookId, user);
-  const resume = await resolveResumeChapter(user, bookId, user.id);
+  const [progress, resume, readIds] = await Promise.all([
+    getProgress(user.id, bookId),
+    resolveResumeChapter(user, bookId, user.id),
+    listReadChapterIds(user.id, bookId),
+  ]);
+
+  // Read chapters are tracked per-chapter (any chapter the reader has opened),
+  // so out-of-order reading is reflected too. The single stored position marks
+  // the "current" chapter and how far into it the reader is.
+  const currentChapterId = progress?.chapter_id ?? null;
+  const currentPct = Math.round(
+    Math.min(1, Math.max(0, progress?.scroll_fraction ?? 0)) * 100
+  );
 
   return (
     <>
@@ -53,22 +68,17 @@ export default async function BookTocPage({
         {chapters.length === 0 ? (
           <p className="text-muted text-sm">No chapters available yet.</p>
         ) : (
-          <ol className="card divide-y divide-line">
-            {chapters.map((ch, i) => (
-              <li key={ch.id}>
-                <Link
-                  href={`/read/${bookId}/${ch.id}`}
-                  className="flex items-center gap-3 px-4 py-3 hover:bg-line/40"
-                >
-                  <span className="text-muted text-sm w-6 text-right tabular-nums">{i + 1}</span>
-                  <span className="flex-1" style={{ fontFamily: "var(--font-serif)" }}>
-                    {ch.title}
-                  </span>
-                  {ch.is_explicit && <span className="badge badge-spicy">🌶</span>}
-                </Link>
-              </li>
-            ))}
-          </ol>
+          <ReaderChapterList
+            bookId={bookId}
+            chapters={chapters.map((c) => ({
+              id: c.id,
+              title: c.title,
+              spicy: c.has_spicy,
+            }))}
+            readIds={readIds}
+            currentChapterId={currentChapterId}
+            currentPct={currentPct}
+          />
         )}
       </main>
     </>

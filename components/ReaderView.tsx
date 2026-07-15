@@ -65,7 +65,7 @@ export default function ReaderView({
   next: NavChapter | null;
   index: number;
   total: number;
-  toc: { id: string; title: string; is_explicit: boolean }[];
+  toc: { id: string; title: string; spicy: boolean }[];
   initialSettings: Settings;
   initialScrollFraction: number;
   initialPage: number;
@@ -88,6 +88,13 @@ export default function ReaderView({
   const viewportRef = useRef<HTMLDivElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const colsRef = useRef<HTMLDivElement>(null);
+
+  // Mark this chapter as read once the reader actually lands on it. Done from
+  // the client (not the server page) so Next.js prefetching a chapter link
+  // doesn't mark it read before the reader opens it.
+  useEffect(() => {
+    postJSON("/api/read", { bookId, chapterId: chapter.id });
+  }, [bookId, chapter.id]);
 
   // ---- reading-time tracking (active seconds) ----
   const activeSecondsRef = useRef(0);
@@ -549,7 +556,7 @@ export default function ReaderView({
                 >
                   <span className="text-muted w-6 text-right tabular-nums">{i + 1}</span>
                   <span className="flex-1">{c.title}</span>
-                  {c.is_explicit && <span>🌶</span>}
+                  {c.spicy && <span>🌶</span>}
                 </button>
               </li>
             ))}
