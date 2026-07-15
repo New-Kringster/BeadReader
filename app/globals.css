@@ -201,6 +201,10 @@ select {
 /* A spicy passage, folded away until the reader opens it. Sits on the reveal
    path only; .spicy-redacted above is what readers without access get instead. */
 .spicy-passage { margin: 1.2em 0; }
+/* The passage's blocks sit one level below .reader-content, so the `> * + *`
+   rule above doesn't reach them. Restate it here or the prose inside a passage
+   loses all its paragraph spacing. */
+.spicy-passage-body > * + * { margin-top: 1.1em; }
 .spicy-passage-body > :first-child { margin-top: 0; }
 .spicy-passage[data-open="false"] .spicy-passage-body {
   max-height: 7em;
