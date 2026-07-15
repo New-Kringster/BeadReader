@@ -1,9 +1,23 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "BeadReader",
   description: "A private book reader.",
+  manifest: "/manifest.json",
+  applicationName: "BeadReader",
+  // Adds the Apple standalone meta tags. iOS ignores the manifest's `display`
+  // field, so these are what actually hide Safari's chrome when the app is
+  // launched from the Home Screen.
+  appleWebApp: {
+    capable: true,
+    title: "BeadReader",
+    statusBarStyle: "default",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#f7f6f3",
 };
 
 export default function RootLayout({
@@ -12,6 +26,8 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full" suppressHydrationWarning>
       <head>
+        {/* Standalone (no browser chrome) when launched from the Home Screen. */}
+        <meta name="mobile-web-app-capable" content="yes" />
         {/* Apply the saved theme before paint to avoid a flash of the wrong one. */}
         <script
           dangerouslySetInnerHTML={{
