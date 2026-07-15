@@ -35,7 +35,7 @@ export default function LoginPage() {
               type="text"
               autoFocus
               autoComplete="off"
-              autoCapitalize="characters"
+              autoCapitalize="none"
               spellCheck={false}
               placeholder="XXXX-XXXX"
               className="field text-center tracking-widest text-lg"

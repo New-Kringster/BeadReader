@@ -47,7 +47,7 @@ export default function ReaderChapterList({
             <Link
               href={`/read/${bookId}/${ch.id}`}
               aria-current={isCurrent ? "true" : undefined}
-              className={`flex flex-1 items-center gap-3 py-3 pl-4 pr-2 hover:bg-line/40 ${
+              className={`flex flex-1 items-start gap-3 py-3 pl-4 pr-2 hover:bg-line/40 ${
                 dimmed ? "opacity-55" : ""
               } ${isCurrent ? "bg-accent/8" : ""}`}
             >
@@ -62,7 +62,7 @@ export default function ReaderChapterList({
               </span>
               <span className="min-w-0 flex-1">
                 <span
-                  className={`block truncate ${isCurrent ? "font-semibold" : ""}`}
+                  className={`block break-words ${isCurrent ? "font-semibold" : ""}`}
                   style={{ fontFamily: "var(--font-serif)" }}
                 >
                   {ch.title}

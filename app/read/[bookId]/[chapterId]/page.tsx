@@ -5,6 +5,7 @@ import {
   listReadableChapters,
   getSettings,
   getProgress,
+  listReadChapterIds,
 } from "@/lib/data";
 import ReaderView from "@/components/ReaderView";
 
@@ -30,9 +31,10 @@ export default async function ReadingPage({
   const prev = index > 0 ? chapters[index - 1] : null;
   const next = index < chapters.length - 1 ? chapters[index + 1] : null;
 
-  const [settings, progress] = await Promise.all([
+  const [settings, progress, readIds] = await Promise.all([
     getSettings(user.id),
     getProgress(user.id, bookId),
+    listReadChapterIds(user.id, bookId),
   ]);
 
   const isThisChapter = progress?.chapter_id === chapterId;
@@ -47,6 +49,7 @@ export default async function ReadingPage({
       index={index + 1}
       total={chapters.length}
       toc={chapters.map((c) => ({ id: c.id, title: c.title, spicy: c.has_spicy }))}
+      readIds={readIds}
       initialSettings={{
         bg_color: settings.bg_color,
         text_color: settings.text_color,

@@ -52,6 +52,7 @@ export default function ReaderView({
   index,
   total,
   toc,
+  readIds,
   initialSettings,
   initialScrollFraction,
   initialPage,
@@ -66,6 +67,7 @@ export default function ReaderView({
   index: number;
   total: number;
   toc: { id: string; title: string; spicy: boolean }[];
+  readIds: string[];
   initialSettings: Settings;
   initialScrollFraction: number;
   initialPage: number;
@@ -78,6 +80,15 @@ export default function ReaderView({
   const [showToc, setShowToc] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [chrome, setChrome] = useState(true); // show top/bottom bars
+
+  // Live reading progress through the current chapter (0-100), shown as a thin
+  // bar and a percentage. In scroll mode it tracks scroll position; in page mode
+  // it's derived from the current page.
+  const [scrollPct, setScrollPct] = useState(() =>
+    Math.round(Math.min(1, Math.max(0, initialScrollFraction)) * 100)
+  );
+
+  const readSet = new Set(readIds);
 
   // Page mode
   const [page, setPage] = useState(initialPage);
@@ -185,6 +196,7 @@ export default function ReaderView({
     const onScroll = () => {
       const max = el.scrollHeight - el.clientHeight;
       const frac = max > 0 ? el.scrollTop / max : 0;
+      setScrollPct(Math.round(Math.min(1, Math.max(0, frac)) * 100));
       saveProgress(frac, 1);
     };
     el.addEventListener("scroll", onScroll, { passive: true });
@@ -234,6 +246,15 @@ export default function ReaderView({
   useEffect(() => {
     if (settings.layout === "page") saveProgress(0, page);
   }, [page, settings.layout, saveProgress]);
+
+  // Progress shown in the bar/label: derived from the page in page mode, or the
+  // tracked scroll position in scroll mode.
+  const progressPct =
+    settings.layout === "page"
+      ? pageCount <= 1
+        ? 100
+        : Math.min(100, Math.max(0, Math.round(((page - 1) / (pageCount - 1)) * 100)))
+      : scrollPct;
 
   // ---- chapter navigation ----
   const goTo = useCallback(
@@ -328,6 +349,25 @@ export default function ReaderView({
 
       {/* Content */}
       <div className="relative flex-1 min-h-0" onClick={() => setChrome((c) => !c)}>
+        {/* Thin live-progress bar — always visible, even with chrome hidden */}
+        <div
+          className="absolute inset-x-0 top-0 z-10 h-0.5 pointer-events-none"
+          style={{ backgroundColor: "color-mix(in oklab, currentColor 12%, transparent)" }}
+          role="progressbar"
+          aria-valuenow={progressPct}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label="Reading progress"
+        >
+          <div
+            className="h-full transition-[width] duration-200"
+            style={{
+              width: `${progressPct}%`,
+              backgroundColor: "color-mix(in oklab, currentColor 55%, transparent)",
+            }}
+          />
+        </div>
+
         {settings.layout === "scroll" ? (
           <div ref={scrollRef} className="absolute inset-0 overflow-y-auto">
             <article
@@ -419,6 +459,7 @@ export default function ReaderView({
         <div className="mx-auto text-center opacity-70">
           <div>
             Chapter {index} of {total}
+            <span className="ml-2 tabular-nums opacity-80">· {progressPct}%</span>
           </div>
           {settings.layout === "page" && (
             <div className="text-xs">
@@ -543,23 +584,37 @@ export default function ReaderView({
       {showToc && (
         <Drawer title="Contents" onClose={() => setShowToc(false)}>
           <ol className="space-y-1 text-ink">
-            {toc.map((c, i) => (
-              <li key={c.id}>
-                <button
-                  className={`w-full text-left px-2 py-2 rounded hover:bg-line/60 flex gap-2 ${
-                    c.id === chapter.id ? "font-semibold" : ""
-                  }`}
-                  onClick={() => {
-                    setShowToc(false);
-                    if (c.id !== chapter.id) goTo(c.id);
-                  }}
-                >
-                  <span className="text-muted w-6 text-right tabular-nums">{i + 1}</span>
-                  <span className="flex-1">{c.title}</span>
-                  {c.spicy && <span>🌶</span>}
-                </button>
-              </li>
-            ))}
+            {toc.map((c, i) => {
+              const isCurrent = c.id === chapter.id;
+              const isRead = readSet.has(c.id);
+              const dimmed = isRead && !isCurrent;
+              return (
+                <li key={c.id}>
+                  <button
+                    className={`w-full text-left px-2 py-2 rounded hover:bg-line/60 flex items-start gap-2 ${
+                      isCurrent ? "font-semibold" : ""
+                    } ${dimmed ? "opacity-55" : ""}`}
+                    aria-current={isCurrent ? "true" : undefined}
+                    onClick={() => {
+                      setShowToc(false);
+                      if (!isCurrent) goTo(c.id);
+                    }}
+                  >
+                    <span className="w-6 shrink-0 text-right tabular-nums text-muted">
+                      {isRead && !isCurrent ? (
+                        <span className="text-accent" aria-label="Read" title="Read">
+                          ✓
+                        </span>
+                      ) : (
+                        i + 1
+                      )}
+                    </span>
+                    <span className="min-w-0 flex-1 break-words">{c.title}</span>
+                    {c.spicy && <span className="shrink-0">🌶</span>}
+                  </button>
+                </li>
+              );
+            })}
           </ol>
         </Drawer>
       )}
