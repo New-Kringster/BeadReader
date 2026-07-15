@@ -32,7 +32,7 @@ export default async function BookTocPage({
     resolveResumeChapter(user, bookId, user.id),
     listReadChapterIds(user.id, bookId),
     listBookComments(bookId, user),
-    getBookReadersProgress(bookId, chapters.map((c) => c.id)),
+    getBookReadersProgress(bookId),
   ]);
 
   // Read chapters are tracked per-chapter (any chapter the reader has opened),

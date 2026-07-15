@@ -1,16 +1,12 @@
 import type { ReaderBookProgress } from "@/lib/data";
 
-function timeAgo(iso: string): string {
-  const then = new Date(iso).getTime();
-  const secs = Math.max(0, Math.round((Date.now() - then) / 1000));
-  if (secs < 60) return "just now";
-  const mins = Math.round(secs / 60);
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.round(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.round(hrs / 24);
-  if (days < 7) return `${days}d ago`;
-  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+/** "2h 15m", "43m", "<1m" — total time spent reading. */
+function formatDuration(secs: number): string {
+  if (secs < 60) return "<1m";
+  const hrs = Math.floor(secs / 3600);
+  const mins = Math.floor((secs % 3600) / 60);
+  if (hrs > 0) return `${hrs}h ${mins}m`;
+  return `${mins}m`;
 }
 
 function initial(name: string): string {
@@ -68,12 +64,14 @@ export default function BookReadersProgress({
                     {r.pct}%
                   </span>
                 </div>
-                {(r.currentChapterTitle || r.updatedAt) && (
-                  <p className="mt-1 truncate text-xs text-muted">
-                    {r.currentChapterTitle ? `On “${r.currentChapterTitle}”` : `${r.readCount}/${r.total} chapters`}
-                    {r.updatedAt && <span className="opacity-70"> · {timeAgo(r.updatedAt)}</span>}
-                  </p>
-                )}
+                <p className="mt-1 truncate text-xs text-muted">
+                  {r.currentChapterNumber
+                    ? `On chapter ${r.currentChapterNumber} of ${r.total}`
+                    : `${r.readCount}/${r.total} chapters`}
+                  {r.totalSeconds >= 60 && (
+                    <span className="opacity-70"> · read {formatDuration(r.totalSeconds)}</span>
+                  )}
+                </p>
               </div>
             </li>
           );

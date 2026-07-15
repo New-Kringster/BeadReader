@@ -453,57 +453,56 @@ export interface ReaderBookProgress {
   readCount: number;
   total: number;
   pct: number;
-  /** Title of the chapter they're currently on — only when the viewer may see
-   *  that chapter (respects the explicit gate); null otherwise. */
-  currentChapterTitle: string | null;
-  updatedAt: string | null;
+  /** 1-based number of the chapter they're currently on (book order), or null. */
+  currentChapterNumber: number | null;
+  /** Total active seconds this person has spent reading this book. */
+  totalSeconds: number;
 }
 
 /**
  * Everyone's progress through a book, for the contents-page widget. Progress is
  * chapters-opened / total published chapters. Only people who have actually
  * started the book are returned, ordered furthest-along first.
- *
- * `viewerReadableChapterIds` is the set of chapters the *viewer* is allowed to
- * see; a person's current-chapter title is only revealed when it's in that set,
- * so the explicit-content gate is never leaked through this widget.
  */
 export async function getBookReadersProgress(
-  bookId: string,
-  viewerReadableChapterIds: string[]
+  bookId: string
 ): Promise<ReaderBookProgress[]> {
   const { data: chData } = await supabaseAdmin
     .from("chapters")
-    .select("id, title")
+    .select("id")
     .eq("book_id", bookId)
     .eq("status", "published")
     .order("position", { ascending: true });
-  const chapters = (chData ?? []) as { id: string; title: string }[];
+  const chapters = (chData ?? []) as { id: string }[];
   const total = chapters.length;
   if (total === 0) return [];
 
-  const titleById = new Map(chapters.map((c) => [c.id, c.title]));
-  const publishedIds = new Set(chapters.map((c) => c.id));
-  const viewerSet = new Set(viewerReadableChapterIds);
+  // 1-based chapter number in book order.
+  const numberById = new Map(chapters.map((c, i) => [c.id, i + 1]));
 
-  const [{ data: users }, { data: reads }, { data: progress }] = await Promise.all([
-    supabaseAdmin.from("users").select("id, name, role").eq("revoked", false),
-    supabaseAdmin.from("chapter_reads").select("user_id, chapter_id").eq("book_id", bookId),
-    supabaseAdmin
-      .from("reading_progress")
-      .select("user_id, chapter_id, updated_at")
-      .eq("book_id", bookId),
-  ]);
+  const [{ data: users }, { data: reads }, { data: progress }, { data: times }] =
+    await Promise.all([
+      supabaseAdmin.from("users").select("id, name, role").eq("revoked", false),
+      supabaseAdmin.from("chapter_reads").select("user_id, chapter_id").eq("book_id", bookId),
+      supabaseAdmin
+        .from("reading_progress")
+        .select("user_id, chapter_id, updated_at")
+        .eq("book_id", bookId),
+      supabaseAdmin.from("reading_time").select("user_id, total_seconds").eq("book_id", bookId),
+    ]);
 
   const readsByUser = new Map<string, Set<string>>();
   for (const r of reads ?? []) {
-    if (!publishedIds.has(r.chapter_id as string)) continue;
+    if (!numberById.has(r.chapter_id as string)) continue;
     const set = readsByUser.get(r.user_id as string) ?? new Set<string>();
     set.add(r.chapter_id as string);
     readsByUser.set(r.user_id as string, set);
   }
   const progByUser = new Map(
     (progress ?? []).map((p) => [p.user_id as string, p as { chapter_id: string | null; updated_at: string }])
+  );
+  const secondsByUser = new Map(
+    (times ?? []).map((t) => [t.user_id as string, (t.total_seconds as number) ?? 0])
   );
 
   const rows: ReaderBookProgress[] = [];
@@ -520,15 +519,12 @@ export async function getBookReadersProgress(
       readCount,
       total,
       pct: Math.min(100, Math.round((readCount / total) * 100)),
-      currentChapterTitle:
-        curId && viewerSet.has(curId) ? titleById.get(curId) ?? null : null,
-      updatedAt: prog?.updated_at ?? null,
+      currentChapterNumber: curId ? numberById.get(curId) ?? null : null,
+      totalSeconds: secondsByUser.get(u.id) ?? 0,
     });
   }
 
-  rows.sort(
-    (a, b) => b.pct - a.pct || (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "")
-  );
+  rows.sort((a, b) => b.pct - a.pct || b.totalSeconds - a.totalSeconds);
   return rows;
 }
 
