@@ -176,10 +176,16 @@ export default function ReaderView({
     const el = scrollRef.current;
     if (!el) return;
 
-    // Restore saved position for this chapter after content lays out.
+    // Restore saved position for this chapter after content lays out, then record
+    // it. Recording on mount matters: a chapter that fits on screen never fires a
+    // scroll event, so onScroll below would never run and the reader would have no
+    // progress row at all — no "Reading" tag and no progress bar in the contents.
+    // Page mode already writes on mount (see the page effect below); this is the
+    // scroll-mode counterpart.
     const restore = requestAnimationFrame(() => {
       const max = el.scrollHeight - el.clientHeight;
       el.scrollTop = Math.max(0, initialScrollFraction * max);
+      saveProgress(max > 0 ? el.scrollTop / max : 0, 1);
     });
 
     const onScroll = () => {

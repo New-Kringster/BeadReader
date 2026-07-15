@@ -421,37 +421,46 @@ export async function addReadingTime(
 // ============================================================
 // Per-chapter read tracking (which chapters a reader has opened)
 // ============================================================
+// These three surface their errors (`if (error) throw error`, as the books and
+// chapters writers above do). They previously discarded them, which is how the
+// whole feature shipped dead: the 0002 migration was never applied, every query
+// failed on the missing table, `listReadChapterIds` returned [] and the API
+// returned 200. A silent [] is indistinguishable from "read nothing yet".
+
 /** Record that a reader has opened (read) a chapter. Idempotent. */
 export async function markChapterRead(
   userId: string,
   bookId: string,
   chapterId: string
 ): Promise<void> {
-  await supabaseAdmin
+  const { error } = await supabaseAdmin
     .from("chapter_reads")
     .upsert(
       { user_id: userId, chapter_id: chapterId, book_id: bookId, read_at: new Date().toISOString() },
       { onConflict: "user_id,chapter_id" }
     );
+  if (error) throw error;
 }
 
 /** The set of chapter ids in this book that the reader has opened. */
 export async function listReadChapterIds(userId: string, bookId: string): Promise<string[]> {
-  const { data } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from("chapter_reads")
     .select("chapter_id")
     .eq("user_id", userId)
     .eq("book_id", bookId);
+  if (error) throw error;
   return (data ?? []).map((r) => r.chapter_id as string);
 }
 
 /** Clear a single chapter's read mark for this reader (undo). */
 export async function unmarkChapterRead(userId: string, chapterId: string): Promise<void> {
-  await supabaseAdmin
+  const { error } = await supabaseAdmin
     .from("chapter_reads")
     .delete()
     .eq("user_id", userId)
     .eq("chapter_id", chapterId);
+  if (error) throw error;
 }
 
 export async function getReadingTime(userId: string, bookId: string): Promise<number> {
