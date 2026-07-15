@@ -515,6 +515,56 @@ export async function listComments(chapterId: string): Promise<CommentRow[]> {
   });
 }
 
+/** A comment plus the chapter it belongs to, for the book-wide comments feed. */
+export interface BookCommentRow extends CommentRow {
+  chapter_id: string;
+  chapter_title: string;
+  /** 1-based position of the chapter within this reader's contents list. */
+  chapter_number: number;
+}
+
+/**
+ * All comments across a book, newest first, each tagged with its chapter. Only
+ * comments on chapters this reader may actually see are returned — chapters
+ * hidden by the explicit-content gate are excluded, so their comments never
+ * leak into the feed.
+ */
+export async function listBookComments(
+  bookId: string,
+  user: Pick<User, "role" | "has_explicit_access">
+): Promise<BookCommentRow[]> {
+  const chapters = await listReadableChapters(bookId, user);
+  if (chapters.length === 0) return [];
+
+  // Number chapters by their position in the reader's contents list (matching
+  // the numbers shown there), not the raw DB position field.
+  const meta = new Map(
+    chapters.map((c, i) => [c.id, { title: c.title, number: i + 1 }])
+  );
+
+  const { data } = await supabaseAdmin
+    .from("comments")
+    .select("id, body, created_at, user_id, chapter_id, users(name, role)")
+    .in("chapter_id", Array.from(meta.keys()))
+    .order("created_at", { ascending: false });
+
+  return (data ?? []).map((c) => {
+    const u = c.users as { name?: string; role?: string } | null;
+    const ch = meta.get(c.chapter_id as string);
+    return {
+      id: c.id as string,
+      body: c.body as string,
+      created_at: c.created_at as string,
+      user_id: c.user_id as string,
+      author_name: u?.name ?? "Someone",
+      author_is_admin: u?.role === "admin",
+      chapter_id: c.chapter_id as string,
+      chapter_title: ch?.title ?? "—",
+      chapter_number: ch?.number ?? 0,
+    };
+  });
+}
+
 export async function addComment(
   userId: string,
   chapterId: string,

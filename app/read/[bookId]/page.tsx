@@ -4,12 +4,14 @@ import { getCurrentUser } from "@/lib/auth";
 import {
   getProgress,
   getPublishedBook,
+  listBookComments,
   listReadableChapters,
   listReadChapterIds,
   resolveResumeChapter,
 } from "@/lib/data";
 import ReaderNav from "@/components/ReaderNav";
 import ReaderChapterList from "@/components/ReaderChapterList";
+import BookComments from "@/components/BookComments";
 import Logo from "@/components/Logo";
 
 export default async function BookTocPage({
@@ -23,10 +25,11 @@ export default async function BookTocPage({
   if (!book) notFound();
 
   const chapters = await listReadableChapters(bookId, user);
-  const [progress, resume, readIds] = await Promise.all([
+  const [progress, resume, readIds, comments] = await Promise.all([
     getProgress(user.id, bookId),
     resolveResumeChapter(user, bookId, user.id),
     listReadChapterIds(user.id, bookId),
+    listBookComments(bookId, user),
   ]);
 
   // Read chapters are tracked per-chapter (any chapter the reader has opened),
@@ -80,6 +83,8 @@ export default async function BookTocPage({
             currentPct={currentPct}
           />
         )}
+
+        <BookComments bookId={bookId} comments={comments} />
       </main>
     </>
   );
