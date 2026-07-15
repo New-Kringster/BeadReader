@@ -445,6 +445,93 @@ export async function listReadChapterIds(userId: string, bookId: string): Promis
   return (data ?? []).map((r) => r.chapter_id as string);
 }
 
+/** One person's progress through a book, for the readers-progress widget. */
+export interface ReaderBookProgress {
+  userId: string;
+  name: string;
+  isAdmin: boolean;
+  readCount: number;
+  total: number;
+  pct: number;
+  /** Title of the chapter they're currently on — only when the viewer may see
+   *  that chapter (respects the explicit gate); null otherwise. */
+  currentChapterTitle: string | null;
+  updatedAt: string | null;
+}
+
+/**
+ * Everyone's progress through a book, for the contents-page widget. Progress is
+ * chapters-opened / total published chapters. Only people who have actually
+ * started the book are returned, ordered furthest-along first.
+ *
+ * `viewerReadableChapterIds` is the set of chapters the *viewer* is allowed to
+ * see; a person's current-chapter title is only revealed when it's in that set,
+ * so the explicit-content gate is never leaked through this widget.
+ */
+export async function getBookReadersProgress(
+  bookId: string,
+  viewerReadableChapterIds: string[]
+): Promise<ReaderBookProgress[]> {
+  const { data: chData } = await supabaseAdmin
+    .from("chapters")
+    .select("id, title")
+    .eq("book_id", bookId)
+    .eq("status", "published")
+    .order("position", { ascending: true });
+  const chapters = (chData ?? []) as { id: string; title: string }[];
+  const total = chapters.length;
+  if (total === 0) return [];
+
+  const titleById = new Map(chapters.map((c) => [c.id, c.title]));
+  const publishedIds = new Set(chapters.map((c) => c.id));
+  const viewerSet = new Set(viewerReadableChapterIds);
+
+  const [{ data: users }, { data: reads }, { data: progress }] = await Promise.all([
+    supabaseAdmin.from("users").select("id, name, role").eq("revoked", false),
+    supabaseAdmin.from("chapter_reads").select("user_id, chapter_id").eq("book_id", bookId),
+    supabaseAdmin
+      .from("reading_progress")
+      .select("user_id, chapter_id, updated_at")
+      .eq("book_id", bookId),
+  ]);
+
+  const readsByUser = new Map<string, Set<string>>();
+  for (const r of reads ?? []) {
+    if (!publishedIds.has(r.chapter_id as string)) continue;
+    const set = readsByUser.get(r.user_id as string) ?? new Set<string>();
+    set.add(r.chapter_id as string);
+    readsByUser.set(r.user_id as string, set);
+  }
+  const progByUser = new Map(
+    (progress ?? []).map((p) => [p.user_id as string, p as { chapter_id: string | null; updated_at: string }])
+  );
+
+  const rows: ReaderBookProgress[] = [];
+  for (const u of (users ?? []) as { id: string; name: string; role: Role }[]) {
+    const readCount = readsByUser.get(u.id)?.size ?? 0;
+    const prog = progByUser.get(u.id);
+    if (readCount === 0 && !prog) continue; // hasn't started this book
+
+    const curId = prog?.chapter_id ?? null;
+    rows.push({
+      userId: u.id,
+      name: u.name,
+      isAdmin: u.role === "admin",
+      readCount,
+      total,
+      pct: Math.min(100, Math.round((readCount / total) * 100)),
+      currentChapterTitle:
+        curId && viewerSet.has(curId) ? titleById.get(curId) ?? null : null,
+      updatedAt: prog?.updated_at ?? null,
+    });
+  }
+
+  rows.sort(
+    (a, b) => b.pct - a.pct || (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "")
+  );
+  return rows;
+}
+
 /** Clear a single chapter's read mark for this reader (undo). */
 export async function unmarkChapterRead(userId: string, chapterId: string): Promise<void> {
   await supabaseAdmin
