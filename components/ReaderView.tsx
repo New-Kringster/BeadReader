@@ -591,7 +591,7 @@ export default function ReaderView({
               return (
                 <li key={c.id}>
                   <button
-                    className={`w-full text-left px-2 py-2 rounded hover:bg-line/60 flex items-center gap-2 ${
+                    className={`w-full text-left px-2 py-2 rounded hover:bg-line/60 flex items-start gap-2 ${
                       isCurrent ? "font-semibold" : ""
                     } ${dimmed ? "opacity-55" : ""}`}
                     aria-current={isCurrent ? "true" : undefined}
@@ -609,7 +609,7 @@ export default function ReaderView({
                         i + 1
                       )}
                     </span>
-                    <span className="min-w-0 flex-1 truncate">{c.title}</span>
+                    <span className="min-w-0 flex-1 break-words">{c.title}</span>
                     {c.spicy && <span className="shrink-0">🌶</span>}
                   </button>
                 </li>
