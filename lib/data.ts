@@ -445,6 +445,87 @@ export async function listReadChapterIds(userId: string, bookId: string): Promis
   return (data ?? []).map((r) => r.chapter_id as string);
 }
 
+/** One person's progress through a book, for the readers-progress widget. */
+export interface ReaderBookProgress {
+  userId: string;
+  name: string;
+  readCount: number;
+  total: number;
+  pct: number;
+  /** 1-based number of the chapter they're currently on (book order), or null. */
+  currentChapterNumber: number | null;
+  /** Total active seconds this person has spent reading this book. */
+  totalSeconds: number;
+}
+
+/**
+ * Readers' progress through a book, for the contents-page widget. Progress is
+ * chapters-opened / total published chapters. Admins are excluded; only readers
+ * who have actually started the book are returned, ordered furthest-along first.
+ */
+export async function getBookReadersProgress(
+  bookId: string
+): Promise<ReaderBookProgress[]> {
+  const { data: chData } = await supabaseAdmin
+    .from("chapters")
+    .select("id")
+    .eq("book_id", bookId)
+    .eq("status", "published")
+    .order("position", { ascending: true });
+  const chapters = (chData ?? []) as { id: string }[];
+  const total = chapters.length;
+  if (total === 0) return [];
+
+  // 1-based chapter number in book order.
+  const numberById = new Map(chapters.map((c, i) => [c.id, i + 1]));
+
+  const [{ data: users }, { data: reads }, { data: progress }, { data: times }] =
+    await Promise.all([
+      supabaseAdmin.from("users").select("id, name").eq("revoked", false).eq("role", "reader"),
+      supabaseAdmin.from("chapter_reads").select("user_id, chapter_id").eq("book_id", bookId),
+      supabaseAdmin
+        .from("reading_progress")
+        .select("user_id, chapter_id, updated_at")
+        .eq("book_id", bookId),
+      supabaseAdmin.from("reading_time").select("user_id, total_seconds").eq("book_id", bookId),
+    ]);
+
+  const readsByUser = new Map<string, Set<string>>();
+  for (const r of reads ?? []) {
+    if (!numberById.has(r.chapter_id as string)) continue;
+    const set = readsByUser.get(r.user_id as string) ?? new Set<string>();
+    set.add(r.chapter_id as string);
+    readsByUser.set(r.user_id as string, set);
+  }
+  const progByUser = new Map(
+    (progress ?? []).map((p) => [p.user_id as string, p as { chapter_id: string | null; updated_at: string }])
+  );
+  const secondsByUser = new Map(
+    (times ?? []).map((t) => [t.user_id as string, (t.total_seconds as number) ?? 0])
+  );
+
+  const rows: ReaderBookProgress[] = [];
+  for (const u of (users ?? []) as { id: string; name: string }[]) {
+    const readCount = readsByUser.get(u.id)?.size ?? 0;
+    const prog = progByUser.get(u.id);
+    if (readCount === 0 && !prog) continue; // hasn't started this book
+
+    const curId = prog?.chapter_id ?? null;
+    rows.push({
+      userId: u.id,
+      name: u.name,
+      readCount,
+      total,
+      pct: Math.min(100, Math.round((readCount / total) * 100)),
+      currentChapterNumber: curId ? numberById.get(curId) ?? null : null,
+      totalSeconds: secondsByUser.get(u.id) ?? 0,
+    });
+  }
+
+  rows.sort((a, b) => b.pct - a.pct || b.totalSeconds - a.totalSeconds);
+  return rows;
+}
+
 /** Clear a single chapter's read mark for this reader (undo). */
 export async function unmarkChapterRead(userId: string, chapterId: string): Promise<void> {
   await supabaseAdmin
