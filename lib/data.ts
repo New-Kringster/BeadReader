@@ -449,7 +449,6 @@ export async function listReadChapterIds(userId: string, bookId: string): Promis
 export interface ReaderBookProgress {
   userId: string;
   name: string;
-  isAdmin: boolean;
   readCount: number;
   total: number;
   pct: number;
@@ -460,9 +459,9 @@ export interface ReaderBookProgress {
 }
 
 /**
- * Everyone's progress through a book, for the contents-page widget. Progress is
- * chapters-opened / total published chapters. Only people who have actually
- * started the book are returned, ordered furthest-along first.
+ * Readers' progress through a book, for the contents-page widget. Progress is
+ * chapters-opened / total published chapters. Admins are excluded; only readers
+ * who have actually started the book are returned, ordered furthest-along first.
  */
 export async function getBookReadersProgress(
   bookId: string
@@ -482,7 +481,7 @@ export async function getBookReadersProgress(
 
   const [{ data: users }, { data: reads }, { data: progress }, { data: times }] =
     await Promise.all([
-      supabaseAdmin.from("users").select("id, name, role").eq("revoked", false),
+      supabaseAdmin.from("users").select("id, name").eq("revoked", false).eq("role", "reader"),
       supabaseAdmin.from("chapter_reads").select("user_id, chapter_id").eq("book_id", bookId),
       supabaseAdmin
         .from("reading_progress")
@@ -506,7 +505,7 @@ export async function getBookReadersProgress(
   );
 
   const rows: ReaderBookProgress[] = [];
-  for (const u of (users ?? []) as { id: string; name: string; role: Role }[]) {
+  for (const u of (users ?? []) as { id: string; name: string }[]) {
     const readCount = readsByUser.get(u.id)?.size ?? 0;
     const prog = progByUser.get(u.id);
     if (readCount === 0 && !prog) continue; // hasn't started this book
@@ -515,7 +514,6 @@ export async function getBookReadersProgress(
     rows.push({
       userId: u.id,
       name: u.name,
-      isAdmin: u.role === "admin",
       readCount,
       total,
       pct: Math.min(100, Math.round((readCount / total) * 100)),

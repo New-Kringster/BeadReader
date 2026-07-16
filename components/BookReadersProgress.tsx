@@ -47,11 +47,6 @@ export default function BookReadersProgress({
                       you
                     </span>
                   )}
-                  {r.isAdmin && (
-                    <span className="shrink-0 rounded bg-line px-1.5 py-0.5 text-xs text-muted">
-                      admin
-                    </span>
-                  )}
                 </div>
                 <div className="mt-1.5 flex items-center gap-2">
                   <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-line">
