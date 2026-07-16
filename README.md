@@ -21,7 +21,7 @@ Clicking the button walks you through the whole thing:
    the Postgres connection string) for you — no copy-pasting keys.
 3. **Enter two values** when prompted:
    - `SESSION_SECRET` — a long random string that signs the login cookie
-     (e.g. `openssl rand -hex 32`).
+      Use this hex generator to generate a random string [Hex Generator](https://codebeautify.org/generate-random-hexadecimal-numbers).
    - `BOOTSTRAP_ADMIN_CODE` — the access code you'll log in with as the first admin.
      Pick something unguessable, e.g. `ADMIN-9F2KQ7XM`.
 4. **Deploy** — during the build, [`scripts/setup-db.mjs`](scripts/setup-db.mjs) runs
