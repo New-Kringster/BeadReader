@@ -28,9 +28,23 @@ if (!connectionString) {
   process.exit(0);
 }
 
+// Supabase's connection string carries `sslmode=require`, which newer pg treats
+// as full certificate-chain verification (`verify-full`). Supabase presents a
+// self-signed root, so that fails with SELF_SIGNED_CERT_IN_CHAIN. Strip the
+// sslmode param so our explicit `ssl` config below wins — we still use TLS, we
+// just don't verify the chain (the connection secret is the trust anchor here).
+let sslConnectionString = connectionString;
+try {
+  const u = new URL(connectionString);
+  u.searchParams.delete("sslmode");
+  sslConnectionString = u.toString();
+} catch {
+  // Not a parseable URL — fall back to the raw string.
+}
+
 const client = new pg.Client({
-  connectionString,
-  // Supabase requires TLS; its pooled/direct hosts use a managed cert.
+  connectionString: sslConnectionString,
+  // Supabase requires TLS; its hosts use a managed/self-signed chain.
   ssl: { rejectUnauthorized: false },
 });
 
