@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import GlobalNavProgress from "@/components/GlobalNavProgress";
 
 export const metadata: Metadata = {
   title: "BeadReader",
@@ -36,7 +37,10 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <GlobalNavProgress />
+        {children}
+      </body>
     </html>
   );
 }
