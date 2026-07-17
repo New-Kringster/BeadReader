@@ -105,6 +105,15 @@ select {
 .btn-danger:hover { background: color-mix(in oklab, var(--danger) 20%, transparent); }
 .btn-sm { padding: 0.3rem 0.6rem; font-size: 0.8rem; }
 
+/* Chrome-less controls — plain text links and buttons with no bubble to react on
+   press — have nothing to show a tap, so during a slower navigation the page can
+   feel frozen. Dim them briefly on :active so every tap is acknowledged. (.btn
+   and .reader-icon have their own press states above, so they're excluded.) */
+a:not(.btn):active,
+button:not(.btn):not(.reader-icon):not(:disabled):active {
+  opacity: 0.5;
+}
+
 .field {
   width: 100%;
   padding: 0.55rem 0.7rem;
