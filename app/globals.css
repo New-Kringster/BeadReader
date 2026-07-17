@@ -198,34 +198,70 @@ select {
   border: 1px dashed color-mix(in oklab, currentColor 35%, transparent);
   background: color-mix(in oklab, currentColor 7%, transparent);
 }
-/* Click-to-reveal wrapper shown to readers WITH access: the spicy passage stays
-   hidden behind the toggle until they choose to reveal it. Theme-aware via
-   currentColor so it works in the admin preview and per-reader colours alike. */
-.spicy-reveal { margin: 1.1em 0; }
+/* Click-to-reveal spicy passage shown to readers WITH access. Collapsed, it
+   shows a short teaser that fades + blurs out toward the bottom; expanded, it
+   grows to the full passage. Theme-aware via currentColor, and the fade falls to
+   the reader's own background colour (--reader-bg, set by ReaderView; absent in
+   the admin preview, where it degrades to a plain blur). */
+.spicy-reveal { position: relative; margin: 1.1em 0; }
+
+.spicy-reveal-body {
+  overflow: hidden;
+  max-height: 6000px;               /* effectively "full" when open */
+  transition: max-height 0.5s ease;
+}
+.spicy-reveal[data-state="collapsed"] .spicy-reveal-body {
+  max-height: 5.5em;                /* teaser: a few opening lines */
+}
+/* Trim the leading/trailing paragraph margins so the teaser starts cleanly. */
+.spicy-reveal-body > :first-child { margin-top: 0; }
+.spicy-reveal-body > :last-child { margin-bottom: 0; }
+
+/* Overlay that progressively blurs (via a mask that ramps in toward the bottom)
+   and fades the teaser out, so the text dissolves rather than being hard-clipped. */
+.spicy-reveal-veil {
+  position: absolute; inset: 0;
+  pointer-events: none;
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, transparent 20%, #000 78%);
+  mask-image: linear-gradient(to bottom, transparent 0, transparent 20%, #000 78%);
+}
+.spicy-reveal-veil::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(
+    to bottom,
+    transparent 0,
+    color-mix(in oklab, var(--reader-bg, transparent) 55%, transparent) 62%,
+    var(--reader-bg, transparent) 100%
+  );
+}
+
 .spicy-reveal-toggle {
   display: flex; align-items: center; justify-content: center; gap: 0.5em;
-  width: 100%; cursor: pointer;
+  cursor: pointer;
   font: inherit; font-size: 0.82em; font-weight: 600;
   letter-spacing: 0.06em; text-transform: uppercase;
-  padding: 0.85em 1em; border-radius: 0.5em;
+  padding: 0.6em 1.1em; border-radius: 999px;
   color: inherit;
-  border: 1px dashed color-mix(in oklab, currentColor 40%, transparent);
-  background: color-mix(in oklab, currentColor 8%, transparent);
-  transition: background 0.15s ease, opacity 0.15s ease;
+  border: 1px solid color-mix(in oklab, currentColor 35%, transparent);
+  background: color-mix(in oklab, currentColor 10%, transparent);
+  transition: background 0.15s ease;
 }
 .spicy-reveal-toggle:hover {
-  background: color-mix(in oklab, currentColor 14%, transparent);
+  background: color-mix(in oklab, currentColor 18%, transparent);
 }
-.spicy-reveal-body {
-  margin-top: 0.6em;
-  padding: 0.4em 1em;
-  border-left: 3px solid color-mix(in oklab, currentColor 30%, transparent);
+/* Collapsed: float the control over the faded bottom edge of the teaser. */
+.spicy-reveal[data-state="collapsed"] .spicy-reveal-toggle {
+  position: absolute; left: 50%; bottom: 0.5em; transform: translateX(-50%);
+  z-index: 2;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
 }
-/* First/last child margins inside the reveal shouldn't add extra vertical gap. */
-.spicy-reveal-body > .reader-content > :first-child,
-.spicy-reveal-body > :first-child { margin-top: 0; }
-.spicy-reveal-body > .reader-content > :last-child,
-.spicy-reveal-body > :last-child { margin-bottom: 0; }
+/* Open: a full-width bar below the revealed passage. */
+.spicy-reveal[data-state="open"] .spicy-reveal-toggle {
+  width: 100%; margin-top: 0.8em;
+}
 .reader-content table { border-collapse: collapse; width: 100%; }
 .reader-content th, .reader-content td {
   border: 1px solid color-mix(in oklab, currentColor 25%, transparent);
