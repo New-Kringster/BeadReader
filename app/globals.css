@@ -254,6 +254,7 @@ select {
 .spicy-reveal-toggle {
   display: flex; align-items: center; justify-content: center; gap: 0.5em;
   cursor: pointer;
+  white-space: nowrap;              /* never wrap the label (e.g. on mobile) */
   font: inherit; font-size: 0.82em; font-weight: 600;
   letter-spacing: 0.06em; text-transform: uppercase;
   padding: 0.6em 1.1em; border-radius: 999px;
