@@ -230,8 +230,10 @@ select {
 .spicy-reveal-body > :last-child { margin-bottom: 0; }
 
 /* Overlay that progressively blurs (via a mask that ramps in toward the bottom)
-   and fades the teaser out, so the text dissolves rather than being hard-clipped. */
-.spicy-reveal-veil {
+   and fades the teaser out, so the text dissolves rather than being hard-clipped.
+   Shared by the reveal (with access) and preview (without access) blocks so both
+   look identical. */
+.spicy-reveal-veil, .spicy-preview-veil {
   position: absolute; inset: 0;
   pointer-events: none;
   backdrop-filter: blur(3px);
@@ -239,7 +241,7 @@ select {
   -webkit-mask-image: linear-gradient(to bottom, transparent 0, transparent 20%, #000 78%);
   mask-image: linear-gradient(to bottom, transparent 0, transparent 20%, #000 78%);
 }
-.spicy-reveal-veil::after {
+.spicy-reveal-veil::after, .spicy-preview-veil::after {
   content: ""; position: absolute; inset: 0;
   background: linear-gradient(
     to bottom,
@@ -275,38 +277,27 @@ select {
   width: 100%; margin-top: 0.8em;
 }
 
-/* Locked preview shown to readers WITHOUT access: a tiny excerpt that blurs and
-   fades out, with a request-access note. There's no reveal control — it can't be
-   opened here. Same light frame as the reveal block. */
-.spicy-preview-clip {
-  position: relative;
-  max-height: 3em;                  /* only a hint — a line or two */
+/* Locked preview shown to readers WITHOUT access. Mirrors the collapsed reveal
+   block exactly — same teaser height, same blur/fade veil — but with a floating
+   request-access chip instead of a reveal control, since it can't be opened. */
+.spicy-preview-body {
   overflow: hidden;
-}
-.spicy-preview-body { margin: 0; opacity: 0.9; }
-.spicy-preview-veil {
-  position: absolute; inset: 0;
-  pointer-events: none;
-  backdrop-filter: blur(3.5px);
-  -webkit-backdrop-filter: blur(3.5px);
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, transparent 12%, #000 70%);
-  mask-image: linear-gradient(to bottom, transparent 0, transparent 12%, #000 70%);
-}
-.spicy-preview-veil::after {
-  content: ""; position: absolute; inset: 0;
-  background: linear-gradient(
-    to bottom,
-    transparent 0,
-    color-mix(in oklab, var(--reader-bg, transparent) 55%, transparent) 55%,
-    var(--reader-bg, transparent) 100%
-  );
+  max-height: 5.5em;                /* same teaser height as the collapsed reveal */
+  margin: 0;
 }
 .spicy-preview-lock {
-  display: flex; align-items: center; justify-content: center; gap: 0.5em;
-  margin-top: 0.7em;
-  font-size: 0.8em; font-weight: 600;
-  letter-spacing: 0.05em; text-transform: uppercase;
-  opacity: 0.8;
+  position: absolute; left: 50%; bottom: 0.5em; transform: translateX(-50%);
+  z-index: 2;
+  display: flex; align-items: center; gap: 0.5em;
+  white-space: nowrap;
+  font-size: 0.82em; font-weight: 600;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 0.6em 1.1em; border-radius: 999px;
+  color: inherit;
+  border: 1px solid color-mix(in oklab, currentColor 35%, transparent);
+  background: color-mix(in oklab, currentColor 10%, transparent);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
 }
 
 .reader-content table { border-collapse: collapse; width: 100%; }

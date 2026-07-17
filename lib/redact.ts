@@ -50,8 +50,10 @@ const CLOSE = "[[/spicy]]";
 // A balanced span: [[spicy]] … [[/spicy]] (non-greedy, across newlines).
 const SPAN = /\[\[spicy\]\]([\s\S]*?)\[\[\/spicy\]\]/g;
 
-/** How many characters of a spicy span leak into a no-access reader's preview. */
-const PREVIEW_CHARS = 90;
+/** How many characters of a spicy span leak into a no-access reader's preview.
+ *  Enough to fill the same teaser height as the reveal block (so the blur/fade
+ *  looks identical), but still only a taste of a multi-paragraph passage. */
+const PREVIEW_CHARS = 160;
 
 /** True if the text contains any spicy markers. */
 export function hasSpicy(md: string): boolean {
