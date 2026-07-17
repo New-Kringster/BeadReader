@@ -1,9 +1,10 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import MarkdownView from "@/components/MarkdownView";
 import ChapterComments from "@/components/ChapterComments";
+import NavProgress from "@/components/NavProgress";
 import type { Layout } from "@/lib/types";
 
 interface NavChapter {
@@ -80,6 +81,12 @@ export default function ReaderView({
   const [showToc, setShowToc] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [chrome, setChrome] = useState(true); // show top/bottom bars
+
+  // Chapter navigation is a server round-trip; useTransition gives us a pending
+  // flag (for the top loading bar) and pendingId marks which control was clicked
+  // (for a localized spinner), so a tap feels acknowledged immediately.
+  const [isNavigating, startNav] = useTransition();
+  const [pendingId, setPendingId] = useState<string | null>(null);
 
   // Live reading progress through the current chapter (0-100), shown as a thin
   // bar and a percentage. In scroll mode it tracks scroll position; in page mode
@@ -269,7 +276,10 @@ export default function ReaderView({
         saveProgress(0, page, true);
       }
       flushTime(true);
-      router.push(`/read/${bookId}/${id}`);
+      // Mark the target as pending and run the navigation inside a transition so
+      // isNavigating drives the loading bar until the new chapter commits.
+      setPendingId(id);
+      startNav(() => router.push(`/read/${bookId}/${id}`));
     },
     [bookId, page, router, saveProgress, flushTime, settings.layout]
   );
@@ -328,6 +338,8 @@ export default function ReaderView({
         } as React.CSSProperties
       }
     >
+      <NavProgress active={isNavigating} />
+
       {/* Top bar */}
       <div
         className={`flex items-center gap-3 px-4 h-12 border-b text-sm shrink-0 transition-opacity ${
@@ -392,12 +404,19 @@ export default function ReaderView({
                   <button
                     className="btn max-w-full text-left"
                     style={{ ...barStyle, whiteSpace: "normal", height: "auto" }}
+                    disabled={isNavigating}
                     onClick={(e) => {
                       e.stopPropagation();
                       goTo(next.id);
                     }}
                   >
-                    Next: {next.title} →
+                    {isNavigating && pendingId === next.id ? (
+                      <span className="inline-flex items-center gap-2">
+                        <span className="spinner" aria-label="Loading" /> Loading…
+                      </span>
+                    ) : (
+                      <>Next: {next.title} →</>
+                    )}
                   </button>
                 ) : (
                   <p className="opacity-60 text-sm">You&apos;ve reached the end of this book.</p>
@@ -457,10 +476,14 @@ export default function ReaderView({
         <button
           className="btn btn-sm"
           style={barStyle}
-          disabled={!prev}
+          disabled={!prev || isNavigating}
           onClick={() => goTo(prev?.id ?? null)}
         >
-          ← Prev
+          {isNavigating && pendingId === prev?.id ? (
+            <span className="spinner" aria-label="Loading" />
+          ) : (
+            "← Prev"
+          )}
         </button>
 
         <div className="mx-auto text-center opacity-70">
@@ -483,10 +506,14 @@ export default function ReaderView({
           <button
             className="btn btn-sm"
             style={barStyle}
-            disabled={!next}
+            disabled={!next || isNavigating}
             onClick={() => goTo(next?.id ?? null)}
           >
-            Next →
+            {isNavigating && pendingId === next?.id ? (
+              <span className="spinner" aria-label="Loading" />
+            ) : (
+              "Next →"
+            )}
           </button>
         )}
       </div>
@@ -602,13 +629,18 @@ export default function ReaderView({
                       isCurrent ? "font-semibold" : ""
                     } ${dimmed ? "opacity-55" : ""}`}
                     aria-current={isCurrent ? "true" : undefined}
+                    disabled={isNavigating}
                     onClick={() => {
-                      setShowToc(false);
-                      if (!isCurrent) goTo(c.id);
+                      // Keep the drawer open so the row's spinner shows while the
+                      // next chapter loads; tapping the current one just closes it.
+                      if (isCurrent) setShowToc(false);
+                      else goTo(c.id);
                     }}
                   >
                     <span className="w-6 shrink-0 text-right tabular-nums text-muted">
-                      {isRead && !isCurrent ? (
+                      {isNavigating && pendingId === c.id ? (
+                        <span className="spinner" aria-label="Loading" />
+                      ) : isRead && !isCurrent ? (
                         <span className="text-accent" aria-label="Read" title="Read">
                           ✓
                         </span>
