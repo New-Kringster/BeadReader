@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { SPICY_REDACTED, SPICY_REVEAL_OPEN } from "@/lib/redact";
+import { SPICY_REDACTED, SPICY_REVEAL_OPEN, SPICY_PREVIEW_OPEN } from "@/lib/redact";
 import SpicyReveal from "@/components/SpicyReveal";
+import SpicyPreview from "@/components/SpicyPreview";
 
 /** Flatten react-markdown children down to their plain text. */
 function toText(children: ReactNode): string {
@@ -13,9 +14,11 @@ function toText(children: ReactNode): string {
   return "";
 }
 
-/** Matches a revealed spicy span (readers WITH access); captures the inner text.
- *  Built fresh per call so no shared `lastIndex` state leaks between renders. */
-const revealPattern = () => /\[\[spicy-reveal\]\]([\s\S]*?)\[\[\/spicy-reveal\]\]/g;
+/** Matches a spicy `reveal` (full-access) or `preview` (no-access) block, capturing
+ *  the kind and the inner text. Built fresh per call so no shared `lastIndex` state
+ *  leaks between renders. */
+const spicyBlockPattern = () =>
+  /\[\[spicy-(reveal|preview)\]\]([\s\S]*?)\[\[\/spicy-\1\]\]/g;
 
 /**
  * Render one run of Markdown. react-markdown does NOT render raw HTML embedded in
@@ -55,15 +58,18 @@ function Markdown({ source }: { source: string }) {
  * sentinels and render as labeled hidden blocks (see `Markdown`).
  *
  * For readers WITH access (and admins), each spicy span arrives wrapped in
- * `[[spicy-reveal]] … [[/spicy-reveal]]` sentinels: we split those out and render
- * the enclosed passage inside a `SpicyReveal` control so it stays hidden until the
- * reader chooses to reveal it.
+ * `[[spicy-reveal]] … [[/spicy-reveal]]` sentinels: we render the enclosed passage
+ * inside a `SpicyReveal` control so it stays hidden until the reader reveals it.
+ *
+ * For readers WITHOUT access, each span arrives as a short `[[spicy-preview]] …
+ * [[/spicy-preview]]` excerpt, rendered blurred inside a `SpicyPreview` note that
+ * can't be opened.
  */
 export default function MarkdownView({ source }: { source: string }) {
   const text = source || "";
 
-  // Fast path: nothing to reveal — render the whole body in one pass.
-  if (!text.includes(SPICY_REVEAL_OPEN)) {
+  // Fast path: no spicy blocks — render the whole body in one pass.
+  if (!text.includes(SPICY_REVEAL_OPEN) && !text.includes(SPICY_PREVIEW_OPEN)) {
     return (
       <div className="reader-content">
         <Markdown source={text} />
@@ -75,15 +81,20 @@ export default function MarkdownView({ source }: { source: string }) {
   const parts: ReactNode[] = [];
   let last = 0;
   let i = 0;
-  for (const match of text.matchAll(revealPattern())) {
+  for (const match of text.matchAll(spicyBlockPattern())) {
     const start = match.index ?? 0;
     const before = text.slice(last, start);
     if (before.trim()) parts.push(<Markdown key={`p${i}`} source={before} />);
-    parts.push(
-      <SpicyReveal key={`s${i}`}>
-        <Markdown source={match[1]} />
-      </SpicyReveal>
-    );
+    const [, kind, inner] = match;
+    if (kind === "reveal") {
+      parts.push(
+        <SpicyReveal key={`s${i}`}>
+          <Markdown source={inner} />
+        </SpicyReveal>
+      );
+    } else {
+      parts.push(<SpicyPreview key={`s${i}`} text={inner.trim()} />);
+    }
     last = start + match[0].length;
     i++;
   }

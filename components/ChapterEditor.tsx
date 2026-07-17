@@ -2,7 +2,7 @@
 import { useRef, useState } from "react";
 import MarkdownView from "@/components/MarkdownView";
 import SubmitButton from "@/components/SubmitButton";
-import { revealSpicy, redactSpicy, hasSpicy } from "@/lib/redact";
+import { revealSpicy, previewSpicy, cleanSpicy, hasSpicy } from "@/lib/redact";
 import type { Chapter } from "@/lib/types";
 
 export default function ChapterEditor({
@@ -17,11 +17,23 @@ export default function ChapterEditor({
   const [status, setStatus] = useState(chapter?.status ?? "draft");
   const [spicy, setSpicy] = useState(chapter?.is_explicit ?? false);
   const [tab, setTab] = useState<"write" | "preview">("write");
-  const [previewAs, setPreviewAs] = useState<"full" | "redacted">("full");
+  const [previewAs, setPreviewAs] = useState<"full" | "preview" | "clean">("full");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const previewSource = previewAs === "full" ? revealSpicy(content) : redactSpicy(content);
+  const previewSource =
+    previewAs === "full"
+      ? revealSpicy(content)
+      : previewAs === "preview"
+        ? previewSpicy(content)
+        : cleanSpicy(content);
   const anySpicy = hasSpicy(content);
+
+  // The three audiences an admin can preview, matching what each reader sees.
+  const AUDIENCES: { key: typeof previewAs; label: string; title: string }[] = [
+    { key: "full", label: "Full", title: "Admins & readers with spicy access" },
+    { key: "preview", label: "Preview", title: "Readers without access — a locked teaser" },
+    { key: "clean", label: "Clean", title: "Cal-mode readers — spicy removed entirely" },
+  ];
 
   /** Wrap the current textarea selection in [[spicy]] … [[/spicy]] markers. */
   function markSpicy() {
@@ -99,8 +111,10 @@ export default function ChapterEditor({
         </button>
         <span>
           Wraps the selected text in{" "}
-          <code className="bg-line/60 px-1 rounded">[[spicy]]…[[/spicy]]</code>. Readers
-          without access see a redaction block in its place; the chapter stays readable.
+          <code className="bg-line/60 px-1 rounded">[[spicy]]…[[/spicy]]</code>. Readers with
+          access get a click-to-reveal block; readers without access see a small locked
+          preview; cal-mode readers don&apos;t see it at all. The chapter stays readable
+          for everyone.
         </span>
       </div>
 
@@ -142,20 +156,17 @@ export default function ChapterEditor({
             <div className="label mb-0">Preview</div>
             {anySpicy && (
               <div className="flex gap-1" role="group" aria-label="Preview audience">
-                <button
-                  type="button"
-                  className={`btn btn-sm ${previewAs === "full" ? "btn-primary" : ""}`}
-                  onClick={() => setPreviewAs("full")}
-                >
-                  Full
-                </button>
-                <button
-                  type="button"
-                  className={`btn btn-sm ${previewAs === "redacted" ? "btn-primary" : ""}`}
-                  onClick={() => setPreviewAs("redacted")}
-                >
-                  Redacted
-                </button>
+                {AUDIENCES.map((a) => (
+                  <button
+                    key={a.key}
+                    type="button"
+                    title={a.title}
+                    className={`btn btn-sm ${previewAs === a.key ? "btn-primary" : ""}`}
+                    onClick={() => setPreviewAs(a.key)}
+                  >
+                    {a.label}
+                  </button>
+                ))}
               </div>
             )}
           </div>

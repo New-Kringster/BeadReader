@@ -8,6 +8,7 @@ import {
   regenerateCodeAction,
   toggleRevokedAction,
   toggleExplicitAction,
+  toggleCalModeAction,
   deleteUserAction,
   setUserCodeAction,
   type UserFormState,
@@ -96,6 +97,9 @@ export default function UsersTable({
                   {!isAdmin && u.has_explicit_access && (
                     <span className="badge badge-spicy">🌶 spicy access</span>
                   )}
+                  {!isAdmin && u.cal_mode && (
+                    <span className="badge badge-draft">🧊 cal mode</span>
+                  )}
                   {u.revoked && <span className="badge badge-draft">revoked</span>}
                 </div>
                 <div className="flex items-center gap-2 mt-1">
@@ -114,6 +118,15 @@ export default function UsersTable({
                     title="Toggle explicit (spicy) access"
                   >
                     {u.has_explicit_access ? "Remove spicy" : "Grant spicy"}
+                  </ActionButton>
+                )}
+                {!isAdmin && (
+                  <ActionButton
+                    action={toggleCalModeAction.bind(null, u.id, !u.cal_mode)}
+                    className="btn btn-sm"
+                    title="Cal mode: hide all spicy content as if it doesn't exist"
+                  >
+                    {u.cal_mode ? "Unset cal mode" : "Set cal mode"}
                   </ActionButton>
                 )}
                 <button

@@ -198,12 +198,24 @@ select {
   border: 1px dashed color-mix(in oklab, currentColor 35%, transparent);
   background: color-mix(in oklab, currentColor 7%, transparent);
 }
+/* Spicy passages sit inside a light, theme-aware frame so they're easy to tell
+   apart from the surrounding story without being loud. currentColor keeps the
+   border/tint legible on every background preset (paper, white, sepia, dark,
+   black), and the tint is deliberately faint. */
+.spicy-reveal, .spicy-preview {
+  position: relative;
+  margin: 1.15em 0;
+  padding: 0.9em 1.1em;
+  border: 1px solid color-mix(in oklab, currentColor 20%, transparent);
+  border-radius: 0.6em;
+  background: color-mix(in oklab, currentColor 3.5%, transparent);
+}
+
 /* Click-to-reveal spicy passage shown to readers WITH access. Collapsed, it
    shows a short teaser that fades + blurs out toward the bottom; expanded, it
-   grows to the full passage. Theme-aware via currentColor, and the fade falls to
-   the reader's own background colour (--reader-bg, set by ReaderView; absent in
-   the admin preview, where it degrades to a plain blur). */
-.spicy-reveal { position: relative; margin: 1.1em 0; }
+   grows to the full passage. The fade falls to the reader's own background colour
+   (--reader-bg, set by ReaderView; absent in the admin preview, where it degrades
+   to a plain blur). */
 
 .spicy-reveal-body {
   overflow: hidden;
@@ -262,6 +274,41 @@ select {
 .spicy-reveal[data-state="open"] .spicy-reveal-toggle {
   width: 100%; margin-top: 0.8em;
 }
+
+/* Locked preview shown to readers WITHOUT access: a tiny excerpt that blurs and
+   fades out, with a request-access note. There's no reveal control — it can't be
+   opened here. Same light frame as the reveal block. */
+.spicy-preview-clip {
+  position: relative;
+  max-height: 3em;                  /* only a hint — a line or two */
+  overflow: hidden;
+}
+.spicy-preview-body { margin: 0; opacity: 0.9; }
+.spicy-preview-veil {
+  position: absolute; inset: 0;
+  pointer-events: none;
+  backdrop-filter: blur(3.5px);
+  -webkit-backdrop-filter: blur(3.5px);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, transparent 12%, #000 70%);
+  mask-image: linear-gradient(to bottom, transparent 0, transparent 12%, #000 70%);
+}
+.spicy-preview-veil::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(
+    to bottom,
+    transparent 0,
+    color-mix(in oklab, var(--reader-bg, transparent) 55%, transparent) 55%,
+    var(--reader-bg, transparent) 100%
+  );
+}
+.spicy-preview-lock {
+  display: flex; align-items: center; justify-content: center; gap: 0.5em;
+  margin-top: 0.7em;
+  font-size: 0.8em; font-weight: 600;
+  letter-spacing: 0.05em; text-transform: uppercase;
+  opacity: 0.8;
+}
+
 .reader-content table { border-collapse: collapse; width: 100%; }
 .reader-content th, .reader-content td {
   border: 1px solid color-mix(in oklab, currentColor 25%, transparent);

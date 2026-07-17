@@ -30,15 +30,19 @@ export default async function AccountPage() {
 
           <div>
             <div className="label">Access</div>
-            {user.has_explicit_access ? (
+            {user.cal_mode ? (
+              <span className="badge badge-draft">🧊 Cal mode</span>
+            ) : user.has_explicit_access ? (
               <span className="badge badge-spicy">🌶 Spicy access enabled</span>
             ) : (
               <span className="badge badge-draft">Standard access</span>
             )}
             <p className="text-xs text-muted mt-2">
-              {user.has_explicit_access
-                ? "Explicit (spicy) chapters are visible to you across the library."
-                : "Explicit chapters are hidden. Ask the library owner if you need access."}
+              {user.cal_mode
+                ? "Spicy content is hidden entirely — the library reads as if it has none."
+                : user.has_explicit_access
+                  ? "Explicit (spicy) chapters are visible to you across the library."
+                  : "Explicit chapters are hidden. Ask the library owner if you need access."}
             </p>
           </div>
 

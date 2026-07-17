@@ -8,6 +8,10 @@ export interface User {
   role: Role;
   access_code: string;
   has_explicit_access: boolean;
+  /** "Cal mode": reader sees the book as if it had no spicy content at all —
+   *  inline spicy passages are removed seamlessly, whole spicy chapters stay
+   *  hidden, and no 🌶 markers show. Mutually exclusive with explicit access. */
+  cal_mode: boolean;
   revoked: boolean;
   created_at: string;
 }
