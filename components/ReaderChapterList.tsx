@@ -1,5 +1,5 @@
 "use client";
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { useState, useTransition } from "react";
 import { resetChapterReadAction } from "@/app/actions/reading";
 
@@ -7,6 +7,20 @@ interface Row {
   id: string;
   title: string;
   spicy: boolean;
+}
+
+/** The left-hand number/tick slot for a chapter row. While the row's navigation
+ *  is in flight (useLinkStatus), it shows a spinner so the tap feels registered. */
+function RowMarker({ isRead, number }: { isRead: boolean; number: number }) {
+  const { pending } = useLinkStatus();
+  if (pending) return <span className="spinner" aria-label="Loading" />;
+  if (isRead)
+    return (
+      <span className="text-accent" aria-label="Read" title="Read">
+        ✓
+      </span>
+    );
+  return <>{number}</>;
 }
 
 export default function ReaderChapterList({
@@ -47,18 +61,12 @@ export default function ReaderChapterList({
             <Link
               href={`/read/${bookId}/${ch.id}`}
               aria-current={isCurrent ? "true" : undefined}
-              className={`flex flex-1 items-start gap-3 py-3 pl-4 pr-2 hover:bg-line/40 ${
+              className={`flex flex-1 items-start gap-3 py-3 pl-4 pr-2 hover:bg-line/40 active:bg-line/60 transition-colors ${
                 dimmed ? "opacity-55" : ""
               } ${isCurrent ? "bg-accent/8" : ""}`}
             >
               <span className="w-6 shrink-0 text-right text-sm text-muted tabular-nums">
-                {isRead ? (
-                  <span className="text-accent" aria-label="Read" title="Read">
-                    ✓
-                  </span>
-                ) : (
-                  i + 1
-                )}
+                <RowMarker isRead={isRead} number={i + 1} />
               </span>
               <span className="min-w-0 flex-1">
                 <span

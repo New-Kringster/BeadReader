@@ -82,11 +82,14 @@ select {
   background: var(--panel);
   color: var(--ink);
   cursor: pointer;
-  transition: background 0.12s, border-color 0.12s, opacity 0.12s;
+  transition: background 0.12s, border-color 0.12s, opacity 0.12s, transform 0.08s;
   text-decoration: none;
   white-space: nowrap;
 }
 .btn:hover { background: color-mix(in oklab, var(--ink) 8%, var(--panel)); }
+/* Immediate tactile feedback on press, so a tap feels registered even before a
+   slower navigation resolves. */
+.btn:active:not(:disabled) { transform: translateY(0.5px) scale(0.985); }
 .btn:disabled { opacity: 0.5; cursor: default; }
 .btn-primary {
   background: var(--accent);
@@ -101,6 +104,15 @@ select {
 }
 .btn-danger:hover { background: color-mix(in oklab, var(--danger) 20%, transparent); }
 .btn-sm { padding: 0.3rem 0.6rem; font-size: 0.8rem; }
+
+/* Chrome-less controls — plain text links and buttons with no bubble to react on
+   press — have nothing to show a tap, so during a slower navigation the page can
+   feel frozen. Dim them briefly on :active so every tap is acknowledged. (.btn
+   and .reader-icon have their own press states above, so they're excluded.) */
+a:not(.btn):active,
+button:not(.btn):not(.reader-icon):not(:disabled):active {
+  opacity: 0.5;
+}
 
 .field {
   width: 100%;
@@ -141,6 +153,37 @@ select {
   background: transparent; color: inherit;
 }
 .reader-icon:hover { background: color-mix(in oklab, currentColor 12%, transparent); }
+.reader-icon:active { transform: scale(0.92); }
+.reader-icon { transition: background 0.12s, transform 0.08s; }
+
+/* Indeterminate top loading bar shown during a navigation (see NavProgress).
+   currentColor keeps it on-theme in the reader; on app pages it reads as ink. */
+.nav-progress {
+  position: fixed; top: 0; left: 0; right: 0; height: 3px;
+  z-index: 100; overflow: hidden; pointer-events: none;
+  background: color-mix(in oklab, currentColor 14%, transparent);
+}
+.nav-progress-bar {
+  position: absolute; top: 0; bottom: 0;
+  background: color-mix(in oklab, currentColor 80%, transparent);
+  border-radius: 0 3px 3px 0;
+  animation: nav-progress-slide 1.05s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+@keyframes nav-progress-slide {
+  0%   { left: -40%; width: 40%; }
+  50%  { width: 55%; }
+  100% { left: 100%; width: 45%; }
+}
+
+/* Small inline spinner reused across controls to mark a pending action. */
+.spinner {
+  display: inline-block; width: 1em; height: 1em; vertical-align: -0.15em;
+  border: 2px solid color-mix(in oklab, currentColor 28%, transparent);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin 0.62s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 
 /* theme-agnostic controls used inside the reader (inherit the reading colors) */
 .reader-btn {

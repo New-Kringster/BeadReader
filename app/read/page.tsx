@@ -45,7 +45,7 @@ export default async function LibraryPage() {
               <Link
                 key={book.id}
                 href={`/read/${book.id}/${resume!.chapterId}`}
-                className="card p-4 flex gap-4 min-w-0 hover:border-accent transition-colors"
+                className="card p-4 flex gap-4 min-w-0 hover:border-accent active:scale-[0.99] active:border-accent transition-[transform,border-color] duration-100"
               >
                 <div className="w-16 h-24 rounded bg-line shrink-0 overflow-hidden flex items-center justify-center">
                   {book.cover_url ? (
