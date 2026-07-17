@@ -1,7 +1,7 @@
 import "server-only";
 import { supabaseAdmin } from "./supabase";
 import { generateAccessCode } from "./codes";
-import { processChapterContent, hasSpicy } from "./redact";
+import { processChapterContent, hasSpicy, type SpicyView } from "./redact";
 import {
   DEFAULT_SETTINGS,
   type Book,
@@ -85,31 +85,56 @@ export async function listChapters(bookId: string): Promise<Chapter[]> {
   return (data ?? []) as Chapter[];
 }
 
-/** Whether this user may see spicy passages in full (vs. redacted). */
-function canSeeSpicy(user: Pick<User, "role" | "has_explicit_access">): boolean {
-  return user.role === "admin" || user.has_explicit_access;
+/** What the user carries that determines their spicy view. */
+type SpicyUser = Pick<User, "role" | "has_explicit_access" | "cal_mode">;
+
+/**
+ * Which view of the spicy spans this reader gets:
+ *  - admins & explicit-access readers → `full` (reveal on demand)
+ *  - "cal mode" readers → `clean` (spicy content removed entirely)
+ *  - everyone else → `preview` (a short, unopenable teaser)
+ * Cal mode wins over explicit access, though they're kept mutually exclusive when
+ * set (see the admin actions).
+ */
+function spicyViewFor(user: SpicyUser): SpicyView {
+  if (user.role === "admin") return "full";
+  if (user.cal_mode) return "clean";
+  if (user.has_explicit_access) return "full";
+  return "preview";
 }
 
 /**
- * Reveal or redact the inline `[[spicy]]` spans in a chapter's body for this
- * reader. Runs server-side, so a reader without access never receives the
- * explicit text — only the redaction placeholder. (This is separate from the
- * whole-chapter `is_explicit` gate below.)
+ * Whether this reader may receive whole-chapter explicit content (the hard
+ * `is_explicit` gate). Cal-mode readers never do, even in the (defensive) case
+ * where both flags are somehow set — so a hidden spicy chapter can't leak to them.
+ */
+function canSeeGatedChapters(user: SpicyUser): boolean {
+  return user.role === "admin" || (user.has_explicit_access && !user.cal_mode);
+}
+
+/**
+ * Process the inline `[[spicy]]` spans in a chapter's body for this reader. Runs
+ * server-side, so the full explicit text never reaches a reader without access —
+ * they get at most a short preview excerpt, or nothing at all in cal mode. (This
+ * is separate from the whole-chapter `is_explicit` gate below.)
  */
 function applyRedaction<T extends Pick<Chapter, "content">>(
   chapter: T,
-  user: Pick<User, "role" | "has_explicit_access">
+  view: SpicyView
 ): T {
-  return { ...chapter, content: processChapterContent(chapter.content, canSeeSpicy(user)) };
+  return { ...chapter, content: processChapterContent(chapter.content, view) };
 }
 
 /** A readable chapter plus a `has_spicy` flag for the contents list. It's true
  *  when the chapter is whole-chapter explicit OR contains any inline `[[spicy]]`
- *  passage — computed from the RAW content, before redaction strips the markers. */
+ *  passage — computed from the RAW content, before processing strips the markers.
+ *  Always false for cal-mode readers, so no 🌶 markers show for them. */
 export type ReadableChapter = Chapter & { has_spicy: boolean };
 
-/** Whether to flag a chapter 🌶: whole-chapter explicit or inline spicy content. */
-function isSpicyChapter(raw: Chapter): boolean {
+/** Whether to flag a chapter 🌶 for this reader: whole-chapter explicit or inline
+ *  spicy content — but never for cal-mode readers, who see no spicy indicators. */
+function isSpicyChapter(raw: Chapter, view: SpicyView): boolean {
+  if (view === "clean") return false;
   return raw.is_explicit || hasSpicy(raw.content);
 }
 
@@ -124,11 +149,13 @@ function isSpicyChapter(raw: Chapter): boolean {
  */
 export async function listReadableChapters(
   bookId: string,
-  user: Pick<User, "role" | "has_explicit_access">
+  user: SpicyUser
 ): Promise<ReadableChapter[]> {
+  const view = spicyViewFor(user);
+
   if (user.role === "admin") {
     const chapters = await listChapters(bookId);
-    return chapters.map((c) => ({ ...applyRedaction(c, user), has_spicy: isSpicyChapter(c) }));
+    return chapters.map((c) => ({ ...applyRedaction(c, view), has_spicy: isSpicyChapter(c, view) }));
   }
 
   let query = supabaseAdmin
@@ -138,12 +165,12 @@ export async function listReadableChapters(
     .eq("status", "published")
     .order("position", { ascending: true });
 
-  if (!user.has_explicit_access) query = query.eq("is_explicit", false);
+  if (!canSeeGatedChapters(user)) query = query.eq("is_explicit", false);
 
   const { data } = await query;
   return ((data ?? []) as Chapter[]).map((c) => ({
-    ...applyRedaction(c, user),
-    has_spicy: isSpicyChapter(c),
+    ...applyRedaction(c, view),
+    has_spicy: isSpicyChapter(c, view),
   }));
 }
 
@@ -159,11 +186,13 @@ export async function getChapter(id: string): Promise<Chapter | null> {
  */
 export async function getReadableChapter(
   chapterId: string,
-  user: Pick<User, "role" | "has_explicit_access">
+  user: SpicyUser
 ): Promise<Chapter | null> {
+  const view = spicyViewFor(user);
+
   if (user.role === "admin") {
     const chapter = await getChapter(chapterId);
-    return chapter ? applyRedaction(chapter, user) : null;
+    return chapter ? applyRedaction(chapter, view) : null;
   }
 
   let query = supabaseAdmin
@@ -173,12 +202,12 @@ export async function getReadableChapter(
     .eq("status", "published")
     .eq("books.status", "published");
 
-  if (!user.has_explicit_access) query = query.eq("is_explicit", false);
+  if (!canSeeGatedChapters(user)) query = query.eq("is_explicit", false);
 
   const { data } = await query.maybeSingle();
   if (!data) return null;
   const { books: _book, ...rest } = data as Chapter & { books: unknown };
-  return applyRedaction(rest as Chapter, user);
+  return applyRedaction(rest as Chapter, view);
 }
 
 async function nextPosition(bookId: string): Promise<number> {
@@ -323,7 +352,18 @@ export async function setUserRevoked(userId: string, revoked: boolean): Promise<
 export async function setReaderExplicit(userId: string, hasAccess: boolean): Promise<void> {
   await supabaseAdmin
     .from("users")
-    .update({ has_explicit_access: hasAccess })
+    // Granting spicy access turns off cal mode — the two are mutually exclusive.
+    .update({ has_explicit_access: hasAccess, ...(hasAccess ? { cal_mode: false } : {}) })
+    .eq("id", userId)
+    .eq("role", "reader");
+}
+
+/** Toggle "cal mode" for a reader. Turning it on clears explicit access (the two
+ *  are mutually exclusive): a cal-mode reader sees no spicy content at all. */
+export async function setReaderCalMode(userId: string, on: boolean): Promise<void> {
+  await supabaseAdmin
+    .from("users")
+    .update({ cal_mode: on, ...(on ? { has_explicit_access: false } : {}) })
     .eq("id", userId)
     .eq("role", "reader");
 }
@@ -551,7 +591,7 @@ export async function getReadingTime(userId: string, bookId: string): Promise<nu
  * else null (nothing the reader may see). Only ever considers gated chapters.
  */
 export async function resolveResumeChapter(
-  user: Pick<User, "role" | "has_explicit_access">,
+  user: SpicyUser,
   bookId: string,
   userId: string
 ): Promise<{ chapterId: string; title: string; resuming: boolean } | null> {
@@ -612,7 +652,7 @@ export interface BookCommentRow extends CommentRow {
  */
 export async function listBookComments(
   bookId: string,
-  user: Pick<User, "role" | "has_explicit_access">
+  user: SpicyUser
 ): Promise<BookCommentRow[]> {
   const chapters = await listReadableChapters(bookId, user);
   if (chapters.length === 0) return [];

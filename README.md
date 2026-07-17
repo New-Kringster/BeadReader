@@ -47,8 +47,10 @@ adding books and readers. That's the entire setup.
   - Markdown chapter editor with **live side-by-side preview**.
   - Reorder / delete chapters; per-chapter **draft/published** and **Explicit ("spicy")** toggle.
   - Reader management: create readers (auto-generates a code to share), copy /
-    regenerate / revoke codes, toggle each reader's spicy access, and a per-reader
-    activity view (which book/chapter they're on + total reading time).
+    regenerate / revoke codes, toggle each reader's spicy access or **cal mode**,
+    and a per-reader activity view (which book/chapter they're on + total reading time).
+  - Inline **`[[spicy]]…[[/spicy]]`** passages within an otherwise-readable chapter,
+    with a Full / Preview / Clean preview so you can see exactly what each audience gets.
 - **Readers**
   - Library of published books; drafts are invisible.
   - Immersive reading view: adjustable background/text colour, font size, and
@@ -58,6 +60,10 @@ adding books and readers. That's the entire setup.
   - **Contents with read tracking**: the chapter list marks a 🌶 on spicy
     chapters, shows a progress bar on the chapter in progress, and greys out
     every chapter already opened (with a low-key per-chapter "mark unread").
+  - **Inline spicy passages** adapt per reader: readers with access get a
+    click-to-reveal block (a blurred teaser that expands); readers without access
+    get a small locked preview with a request-access note; **cal-mode** readers see
+    the book with all spicy content removed — no markers, no previews, no 🌶.
   - **Prev/next chapter** navigation (buttons, an end-of-chapter button, arrow keys)
     and a Contents drawer.
   - **Active reading-time tracking** that pauses when the tab loses focus or goes idle.

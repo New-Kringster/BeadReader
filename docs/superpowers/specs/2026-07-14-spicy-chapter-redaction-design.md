@@ -112,3 +112,27 @@ per-user colors).
 - Manual end-to-end: admin editor Full/Redacted preview; a reader with access sees
   full text; a reader without access sees redaction blocks; a fully-hidden chapter
   stays absent for a reader without access.
+
+## Addendum (evolved) — three views + cal mode
+
+The single reveal/redact split has since become a **three-way view** of inline
+`[[spicy]]` spans, chosen per reader in `spicyViewFor` (`lib/data.ts`):
+
+- **full** (admins & readers with `has_explicit_access`): the passage is kept and
+  wrapped in `[[spicy-reveal]]` sentinels; the client renders a bordered,
+  click-to-reveal block — a blurred/faded teaser that expands to the full text
+  (`revealSpicyCollapsible` + `components/SpicyReveal.tsx`).
+- **preview** (readers without access): the span is replaced with a *short excerpt*
+  (`PREVIEW_CHARS`, word-trimmed) wrapped in `[[spicy-preview]]` sentinels and
+  rendered blurred with a "request access" note that can't be opened
+  (`previewSpicy` + `components/SpicyPreview.tsx`). This intentionally leaks a small
+  teaser; the rest of the passage is still never sent.
+- **clean** (`cal_mode` readers): the span is removed entirely — no placeholder, no
+  marker, no 🌶 in the contents list — so the book reads as if it had no spicy
+  content (`cleanSpicy`). Whole-chapter `is_explicit` chapters also stay hidden for
+  them (`canSeeGatedChapters`).
+
+`cal_mode` is a per-user boolean (migration `0003_cal_mode.sql`), mutually exclusive
+with `has_explicit_access` at the action layer. Spicy blocks now sit inside a light,
+theme-aware border to set them apart from the surrounding story. The editor preview
+toggle is Full / Preview / Clean.

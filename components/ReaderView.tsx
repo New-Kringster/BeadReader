@@ -319,7 +319,14 @@ export default function ReaderView({
   return (
     <div
       className="fixed inset-0 flex flex-col"
-      style={{ backgroundColor: settings.bg_color, color: settings.text_color }}
+      style={
+        {
+          backgroundColor: settings.bg_color,
+          color: settings.text_color,
+          // Lets the spicy-reveal teaser fade out to the reader's own background.
+          "--reader-bg": settings.bg_color,
+        } as React.CSSProperties
+      }
     >
       {/* Top bar */}
       <div

@@ -7,6 +7,7 @@ import {
   regenerateCode,
   setUserRevoked,
   setReaderExplicit,
+  setReaderCalMode,
   setCustomAccessCode,
   deleteUser,
   getUserByAccessCode,
@@ -77,6 +78,14 @@ export async function toggleRevokedAction(userId: string, revoked: boolean): Pro
 export async function toggleExplicitAction(userId: string, hasAccess: boolean): Promise<void> {
   await requireAdmin();
   await setReaderExplicit(userId, hasAccess);
+  revalidatePath("/admin/readers");
+}
+
+/** Toggle "cal mode": the reader sees the book as if it had no spicy content at
+ *  all. Mutually exclusive with spicy access (handled in the data layer). */
+export async function toggleCalModeAction(userId: string, on: boolean): Promise<void> {
+  await requireAdmin();
+  await setReaderCalMode(userId, on);
   revalidatePath("/admin/readers");
 }
 
