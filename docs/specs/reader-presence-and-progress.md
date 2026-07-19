@@ -1,6 +1,6 @@
-# Spec: Reader Presence & Comprehensive Reading-Progress Tracker
+# Spec: Reader Presence, Social Nudges & Comprehensive Reading-Progress Tracker
 
-**Status:** Draft for review
+**Status:** Draft for review — decisions locked (see §3)
 **Author:** (drafted with Claude Code)
 **Date:** 2026-07-19
 **Applies to:** BeadReader (Next.js 16 App Router + Supabase Postgres + Cloudflare R2)
@@ -10,138 +10,106 @@
 ## 1. Summary
 
 Add a shared, social layer to BeadReader so the small circle of invited readers can
-see each other's activity:
+see each other's activity and lightly interact:
 
 1. **Presence** — who is *online right now*, what book/chapter they're reading, and
    how far along they are. Surfaced in the **library** and inside the **reader**
    (top-bar avatar cluster with a green online dot; a green ring + chapter-number
-   badge when someone is in the *same* book as you).
-2. **Comprehensive progress tracker** — a richer, shareable stats view that every
-   reader can see: time per chapter, when (which hours) each reader reads, streaks,
-   pace, and per-book/aggregate history. Reached from a **Stats** entry in the
-   library menu, with a click-through detail page per reader.
+   badge when someone is in the *same* book as you). **Online/offline only.**
+2. **Tap-to-interact (nudges)** — in the reader, tap another reader's avatar to see
+   what they're reading and send them a **"bump"** or a **short quick-text**. Both are
+   **ephemeral**: they pop up on the recipient's screen, linger a few seconds, then
+   fade. Nothing is stored after delivery.
+3. **Comprehensive progress tracker** — a stats view every reader can see: time per
+   chapter, an **hourly-per-day** reading histogram you can **scroll sideways through
+   day by day**, streaks, pace, and per-book history. Reached from a **Stats** entry in
+   the library menu, with a click-through detail page per reader.
 
-This builds directly on infrastructure that already exists:
-`reading_progress`, `chapter_reads`, `reading_time`, and the static
-`getBookReadersProgress()` "Who's reading" widget. The **progress half is mostly a
-surfacing/aggregation task**; the genuinely new work is a **presence layer**
-(there is no real-time or "last active" concept today) and **finer-grained capture**
-(per-chapter time + reading-hour buckets).
+Built on infrastructure that already exists (`reading_progress`, `chapter_reads`,
+`reading_time`, the static `getBookReadersProgress()` "Who's reading" widget). The
+progress half is mostly surfacing/aggregation; the new work is a **presence layer**
+(no "active now" concept today), **finer-grained capture** (per-chapter time +
+hourly-per-day buckets), and a tiny **ephemeral nudge relay**.
 
 ---
 
 ## 2. Goals & non-goals
 
 ### Goals
-- See at a glance which readers are online, and what they're reading, from the
-  library and the reader.
-- In the reader top bar: an avatar cluster with a green dot for online readers; a
-  green ring + current-chapter-number badge for readers in the *same book*.
-- A comprehensive, all-readers-visible progress dashboard with per-chapter time,
-  reading-hour distribution, streaks, pace, and history — clickable into per-reader
-  detail.
-- Reuse existing telemetry (the 15 s reading-time flush, the 600 ms progress write,
-  the chapter-open mark) rather than adding a parallel pipeline.
-- Preserve the app's security model: **no client-side DB access**; everything through
-  server routes using the service role; RLS stays policy-less.
+- See which readers are online and what they're reading, from the library and the reader.
+- Reader top bar: avatar cluster, green dot for online; green ring + current-chapter
+  badge for readers in the *same* book.
+- Tap a reader → see their book/chapter → send a **bump** or **ephemeral quick-text**.
+- All-readers-visible stats: per-chapter time, hourly-per-day histogram (day-scrollable),
+  streaks, pace, per-book history — clickable into per-reader detail.
+- **One telemetry event.** Presence rides the existing ~15 s reading-time flush — no
+  second heartbeat timer.
+- Preserve the security model: **no client-side DB access**; everything through server
+  routes on the service role; RLS stays policy-less.
 
 ### Non-goals (v1)
-- No chat / reactions / comments-on-progress (comments already exist separately).
-- No push notifications / "X started reading Y" alerts.
-- No true bidirectional websockets — polling is sufficient at this scale
-  (see §6.1 for rationale and the Realtime alternative).
-- No cross-account privacy tiers beyond a single per-reader "share my activity"
-  toggle and the existing `cal_mode`/explicit-access rules.
-- No admin-only analytics changes (`getReaderActivity` / `/admin/readers` stay as-is).
+- No "away/idle" amber tier — **online/offline only**.
+- No persistent chat / message history — nudges are fire-and-forget and purged on delivery.
+- No websockets — polling at the existing ~15 s cadence is snappy enough at this scale.
+- No push notifications.
+- No admin changes (`getReaderActivity` / `/admin/readers` stay as-is). Admins are
+  excluded from the social layer.
 
 ---
 
-## 3. Current state (what we reuse)
+## 3. Locked decisions (from review)
 
-| Concern | Where it lives today |
+| # | Decision |
 |---|---|
-| Current position (book, chapter, scroll/page) | `reading_progress` (PK `user_id, book_id`), `lib/types.ts:ReadingProgress` |
-| Chapters opened (out-of-order read marks) | `chapter_reads` (PK `user_id, chapter_id`), migration `0002` |
-| Accumulated **active** seconds per book | `reading_time` (PK `user_id, book_id`) |
-| Per-book aggregation of readers' progress | `getBookReadersProgress()` — `lib/data.ts` ~L588 |
-| Static "Who's reading" widget | `components/BookReadersProgress.tsx` (initial-letter avatars, progress bar, "on chapter X of Y") |
-| Active-seconds ticker + 15 s flush | `components/ReaderView.tsx` ~L117-161 (`FLUSH_MS = 15_000`, `IDLE_MS = 120_000`) |
-| Progress write (debounced 600 ms) | `ReaderView` → `POST /api/progress` |
-| Chapter-open mark (on mount) | `ReaderView` → `POST /api/read` |
-| Reader top bar (icon group) | `components/ReaderView.tsx` ~L343-367 (`ml-auto flex … reader-icon`) |
-| Webtoon top bar | `components/WebtoonReaderView.tsx` ~L198-202 |
-| Library | `app/read/page.tsx` |
-| Book contents / TOC | `app/read/[bookId]/page.tsx` |
-| Identity (name only, no avatars) | `users` table; initial-letter avatar pattern in `BookReadersProgress.tsx` |
+| 1 | Presence is **online/offline only** (no away tier). |
+| 2 | Stats use **pre-aggregated rollups**, not a raw event log. |
+| 3 | A per-reader **opt-out toggle** lives in reader settings (`share_activity`, default on). |
+| 4 | Reading-hours are captured **hourly-per-day**, and the stats UI lets you **scroll sideways through the history, one day at a time**. |
+| 5 | **Fold presence into the existing ~15 s reading-time flush** — a single event, kept snappy. No separate heartbeat. |
+| 6 | Add **tap-a-reader → bump / quick-text**, ephemeral (appears briefly, then disappears; not saved). |
 
-**Key gaps:** (1) nothing records that a reader is *currently* active — `updated_at`
-is the closest proxy; (2) time is aggregated per-book only, not per-chapter;
-(3) no record of *when* (hour of day) reading happened.
+Scale assumption for budgeting: **~4 readers, ~2 h/day each.**
 
 ---
 
 ## 4. Feature A — Reader Presence
 
-### 4.1 Concept & definitions
-
-- **Online / active now:** a reader whose client has sent a heartbeat within the
-  last `ONLINE_WINDOW` (proposed **90 s**). The reader must be actively engaged
-  (same rule as the existing ticker: `visibilityState === "visible"` **and**
-  `document.hasFocus()` **and** not idle for `IDLE_MS`).
-- **Idle (soft-away):** heartbeat within `AWAY_WINDOW` (proposed **5 min**) but not
-  the online window — shown as an amber dot, "away". *(Optional in v1; can ship as
-  online/offline only and add amber later.)*
-- **Offline:** no heartbeat within `AWAY_WINDOW`.
-- **Reading X:** the reader's most recent presence row names `book_id` +
-  `chapter_id`; we resolve chapter → 1-based chapter number in book order (reuse the
-  `numberById` map logic from `getBookReadersProgress`).
+### 4.1 Definitions
+- **Online:** the reader's client flushed a presence beat within the last
+  `ONLINE_WINDOW` (proposed **45 s** — 3× the ~15 s flush, tolerant of one dropped
+  beat) **and** was engaged at that beat (existing rule: `visibilityState ===
+  "visible"` && `document.hasFocus()` && not idle for `IDLE_MS`).
+- **Offline:** no fresh beat in `ONLINE_WINDOW`, or last beat had `active=false`.
+- No away/idle tier (locked decision #1).
+- **Reading X · ch N:** from the reader's presence row (`book_id` + `chapter_id`),
+  resolving chapter → 1-based number via the shared ordering helper (§6.3).
 
 ### 4.2 Where presence appears
+**(a) Library — `app/read/page.tsx`:** an "Online now" strip of avatar chips at the
+top (hidden when nobody's online), each showing name + "reading *Title* · ch N".
+Book cards get a small "N reading now" stacked-avatar cluster.
 
-**(a) Library — `app/read/page.tsx`**
-- A compact **"Online now" strip** at the top of the library: avatar chips of
-  currently-online readers, each showing name + "reading *Title* · ch N" on hover /
-  under the avatar. Empty state hidden entirely when nobody is online.
-- On each **book card**, a small stacked-avatar cluster ("2 reading now") for readers
-  currently in that book, so you can see activity per book at a glance.
+**(b) Book contents — `app/read/[bookId]/page.tsx` + `components/BookReadersProgress.tsx`:**
+the existing "Who's reading" widget gains a live **green dot** on online readers and
+floats them to the top.
 
-**(b) Book contents page — `app/read/[bookId]/page.tsx`**
-- Upgrade the existing `BookReadersProgress` "Who's reading" widget: readers online
-  in this book get a **green dot** on their avatar and a live "on chapter N now"
-  label. (This widget already renders avatars + chapter number — presence just adds
-  the live dot and reorders online readers to the top.)
-
-**(c) Reader top bar — `components/ReaderView.tsx` and `components/WebtoonReaderView.tsx`**
-- A new **presence cluster** dropped into the `ml-auto` icon group (before the
-  Contents/Comments/Settings icons), reusing the `reader-icon` sizing and the
-  initial-avatar style:
-  - **Any reader online (anywhere):** show up to 3 stacked initial-avatars, each with
-    a **green online dot** (bottom-right). Overflow shows "+N".
-  - **Reader online in the *same book* as you:** that avatar gets a **green ring**
-    around it, plus a small **status badge** (bottom-right, replacing/【combined with】
-    the green dot) showing their **current chapter number** (e.g. a green circle with
-    "12"). This is the "they're right here with you" signal you asked for.
-  - Tapping the cluster opens a small popover listing online readers: avatar, name,
-    "reading *Title* · ch N", and a relative "· active now / 2m ago".
-
-**Visual spec for the same-book avatar (reader top bar):**
+**(c) Reader top bar — `components/ReaderView.tsx` (~L343-367) & `components/WebtoonReaderView.tsx` (~L198):**
+a **presence cluster** in the `ml-auto` icon group, reusing `reader-icon` sizing and
+the initial-avatar style:
+- Up to 3 stacked initial-avatars, each with a **green online dot** (bottom-right);
+  overflow "+N".
+- A reader online **in the same book as you** gets a **green ring** + a **status badge**
+  showing their **current chapter number** (green circle with "N").
+- Tapping opens the **reader popover** (§5) — the entry point for nudges.
 
 ```
    ┌─────────┐
-   │  ( A )  │  ← initial avatar, bg-accent/15 text-accent, rounded-full
-   │       ● │  ← status dot: green circle, bottom-right
-   └─────────┘     · plain green dot        = online, different book
-     green ring     · green ring + "N" dot  = online, SAME book, on chapter N
+   │  ( A )  │  initial avatar (bg-accent/15 text-accent, rounded-full)
+   │       ● │  green dot            = online, different book
+   └─────────┘  green ring + "N" dot = online, SAME book, on chapter N
 ```
 
-- Both the text reader and webtoon reader get the same cluster for parity
-  (webtoon header is `WebtoonReaderView.tsx` ~L198).
-
 ### 4.3 Data model (presence)
-
-Add a single presence table. One row per reader (their *latest* live location), so
-presence lookups are cheap and self-cleaning (a stale row simply reads as offline).
-
 ```sql
 -- migration 0005_reader_presence.sql
 create table reader_presence (
@@ -149,256 +117,202 @@ create table reader_presence (
   book_id      uuid references books(id) on delete set null,
   chapter_id   uuid references chapters(id) on delete set null,
   scroll_fraction real not null default 0,
-  is_active    boolean not null default true,   -- engaged vs. soft-away at last beat
+  is_active    boolean not null default true,
   last_beat_at timestamptz not null default now()
 );
 create index reader_presence_last_beat_idx on reader_presence (last_beat_at);
--- RLS stays enabled with no policies (server-only access via service role).
+-- RLS enabled, no policies (server-only via service role).
 ```
-
-Rationale for a dedicated table (vs. reusing `reading_progress.updated_at`):
-`reading_progress` only updates when the position changes (debounced 600 ms on
-scroll), so a reader sitting still on one page would look "offline" within seconds.
-Presence needs its own heartbeat cadence independent of position changes.
-
-`lib/types.ts` addition:
+Dedicated table (not `reading_progress.updated_at`) because progress only writes on
+position change; presence needs its own freshness signal.
 
 ```ts
+// lib/types.ts
 export interface ReaderPresence {
-  user_id: string;
-  book_id: string | null;
-  chapter_id: string | null;
-  scroll_fraction: number;
-  is_active: boolean;
-  last_beat_at: string;
+  user_id: string; book_id: string | null; chapter_id: string | null;
+  scroll_fraction: number; is_active: boolean; last_beat_at: string;
 }
-
-// Derived, for UI:
 export interface PresenceEntry {
-  userId: string;
-  name: string;
-  status: "online" | "away" | "offline";
-  bookId: string | null;
-  bookTitle: string | null;
-  chapterNumber: number | null;   // 1-based, in book order
-  sameBook: boolean;              // set relative to the viewer's current book
-  lastBeatAt: string;
+  userId: string; name: string; online: boolean;
+  bookId: string | null; bookTitle: string | null;
+  chapterNumber: number | null; sameBook: boolean; lastBeatAt: string;
 }
 ```
 
-### 4.4 Heartbeat (client → server)
+### 4.4 Write path — folded into the reading-time flush (decision #5)
+There is **no separate heartbeat**. The existing `flushTime` in `ReaderView` /
+`WebtoonReaderView` (every `FLUSH_MS = 15_000`, and on `pagehide`/visibility-hidden)
+is extended to carry presence:
 
-Piggyback on the existing engagement ticker in `ReaderView`/`WebtoonReaderView`
-rather than adding a new timer:
+- `POST /api/reading-time` payload grows from `{ bookId, seconds }` to
+  `{ bookId, chapterId, seconds, scrollFraction, active, hourOfDay, localDay }`.
+  (`active` reuses the existing `visible && hasFocus && !idle` computation;
+  `hourOfDay`/`localDay` come from the client's local clock — see §7.)
+- The route (`app/api/reading-time/route.ts`), after re-auth via `getCurrentUser()`,
+  now writes in one call:
+  1. `reading_time` (book total) — unchanged.
+  2. `chapter_reading_time` (per-chapter total) — new (§7).
+  3. `reading_time_hourly` (per day+hour) — new (§7).
+  4. **`reader_presence`** upsert with `last_beat_at = now()`, `is_active = active`.
+- On `pagehide`/hidden, the final beacon carries `active:false` → the reader drops
+  offline within `ONLINE_WINDOW`.
+- Readers only; admins never write presence.
 
-- **Cadence:** send a heartbeat every `HEARTBEAT_MS` (proposed **30 s**) *and*
-  immediately on chapter change. Reuse the existing `active` computation
-  (`visible && hasFocus && !idle`) to set `is_active`.
-- **Transport:** `POST /api/presence` with
-  `{ bookId, chapterId, scrollFraction, active }`. On `pagehide`/`visibilitychange →
-  hidden`, send a final beacon with `active:false` (via `navigator.sendBeacon`,
-  mirroring `flushTime(true)`), so the reader drops offline promptly.
-- **Server:** `app/api/presence/route.ts` re-auths with `getCurrentUser()` (same as
-  the other telemetry routes) and upserts the caller's `reader_presence` row with
-  `last_beat_at = now()`. Reader role only; admins excluded from presence (consistent
-  with `getBookReadersProgress`).
+> Keeping the ~15 s cadence (not slowing it) keeps presence snappy, as requested. One
+> POST does time-tracking **and** presence — no extra request.
 
-New endpoint: `app/api/presence/route.ts`
-- `POST` → upsert own heartbeat (above).
-- `GET` → return presence for the viewer. Query params: optional `bookId` (the
-  book the viewer is currently in, to compute `sameBook`). Returns
-  `PresenceEntry[]` for all non-revoked readers whose `last_beat_at` is within
-  `AWAY_WINDOW`, excluding the viewer, honoring the share toggle (§8) and
-  `cal_mode`/access visibility rules. This is the endpoint the library and reader
-  poll.
+### 4.5 Read path — poll
+- `GET /api/presence?bookId=<current>` returns `PresenceEntry[]` for non-revoked
+  readers with a fresh beat, excluding the viewer, honoring the opt-out (§9) and
+  cal-mode/access rules, with `sameBook` computed against `bookId`. **The same
+  response also carries any pending nudges for the viewer (§5.3).**
+- **Poll cadence: 15 s**, paused when the tab is hidden (`visibilitychange`). Matches
+  the write cadence so presence and nudges feel live. At 4 readers this is trivial
+  (see §8).
+- Library and reader each render an initial server snapshot, then a small client
+  component polls to stay fresh.
 
-### 4.5 Fetching presence (server → client)
-
-Polling, not sockets (see §6.1):
-
-- **Library (`app/read/page.tsx`):** server-render the initial "online now" strip
-  from a new `getOnlinePresence(viewerId)` in `lib/data.ts`, then a small client
-  component polls `GET /api/presence` every `POLL_MS` (proposed **20 s**) to keep it
-  fresh. Poll pauses when the tab is hidden (`visibilitychange`) to save requests.
-- **Reader:** the chapter route (`app/read/[bookId]/[chapterId]/page.tsx`) passes an
-  initial presence snapshot as a prop; the top-bar cluster client component polls
-  `GET /api/presence?bookId=<current>` on the same cadence and recomputes
-  `sameBook` / chapter badges.
-
-`lib/data.ts` additions:
-- `getOnlinePresence(viewerId, viewerBookId?)` → `PresenceEntry[]` — joins
-  `reader_presence` (fresh rows) with `users`, resolves chapter → number using the
-  same per-book ordering used in `getBookReadersProgress`, sets `sameBook`.
-- Reuse existing chapter-ordering helper (factor `numberById` out of
-  `getBookReadersProgress` into a small shared helper to avoid duplication).
+`lib/data.ts` additions: `getOnlinePresence(viewerId, viewerBookId?)`,
+`upsertPresence(...)` (called inside the reading-time write), and a shared
+`chapterNumberMap(bookId)` helper factored out of `getBookReadersProgress`.
 
 ### 4.6 Edge cases
-- **Reader on the library/TOC page (not in a chapter):** heartbeat with
-  `chapterId = null` → shown as "online, browsing" (green dot, no chapter badge).
-  *(Optional: add a lightweight heartbeat to the library client too, so browsing
-  counts as online. v1 may treat only in-reader as online.)*
-- **Multiple tabs:** last write wins (single row per user); harmless.
-- **Clock skew:** freshness computed server-side against `now()`, never client time.
-- **Cal-mode / explicit-access chapters:** if a reader is in a chapter the viewer
-  can't see, show book + generic "reading" but suppress the chapter number.
-- **Admins:** never appear in presence lists (readers-only social layer).
-- **Stale rows:** no cron needed — rows outside `AWAY_WINDOW` are simply filtered
-  out. (Optional housekeeping: a `delete from reader_presence where last_beat_at <
-  now() - interval '1 day'` on write, cheap and bounded.)
+- Reader on library/TOC (no chapter): beat with `chapterId=null` → "online, browsing"
+  (green dot, no badge). A lightweight flush on the library page keeps browsing counted
+  as online.
+- Multiple tabs: single row per user, last write wins.
+- Freshness always computed server-side vs `now()`.
+- Cal-mode / explicit chapters the viewer can't see: show book + generic "reading",
+  suppress chapter number.
+- Stale rows self-expire (filtered by `last_beat_at`); optional cheap sweep on write.
 
 ---
 
-## 5. Feature B — Comprehensive Reading-Progress Tracker
+## 5. Feature B — Tap-to-interact: bump & ephemeral quick-text (decision #6)
 
-An all-readers-visible dashboard, reachable from a **Stats** item in the library
-menu, with a per-reader detail page.
+### 5.1 Interaction
+1. In the reader, tap the presence cluster (or a specific avatar) → **reader popover**.
+2. Popover shows, per online reader: avatar, name, "reading *Title* · ch N", "active now".
+3. Two actions on a reader:
+   - **Bump** — one tap; sends a canned nudge (e.g. "📚 bumped you").
+   - **Quick-text** — a short input (≤ 140 chars, single line); sends once.
+4. On the **recipient's** screen (anywhere in the app that polls — reader or library),
+   an incoming bump/text appears as a **toast/overlay**:
+   - Bump: e.g. "👋 Alice bumped you" — visible ~**5 s**, then fades.
+   - Text: e.g. "Alice: this chapter 😭" — visible ~**8 s**, then fades. Tap to dismiss early.
+5. **Nothing is persisted after delivery** — no history, no inbox, no "seen at". Sender
+   sees only a lightweight "sent ✓".
 
-### 5.1 Stats we can show from existing data (no new capture)
-- **Overall progress per book:** chapters read / total, % — from `chapter_reads`
-  (already in `getBookReadersProgress`).
-- **Total time per book & grand total:** from `reading_time`.
-- **Current position / "on chapter N":** from `reading_progress`.
-- **Books started / finished, leaderboard-style ordering:** derived.
+### 5.2 Data model (transient relay)
+Ephemeral still needs a tiny queue to bridge the ≤ 15 s poll gap:
+```sql
+-- migration 0008_reader_nudges.sql
+create table reader_nudges (
+  id           uuid primary key default gen_random_uuid(),
+  from_user_id uuid not null references users(id) on delete cascade,
+  to_user_id   uuid not null references users(id) on delete cascade,
+  kind         text not null check (kind in ('bump','text')),
+  body         text,                       -- null for bump; ≤140 chars for text
+  created_at   timestamptz not null default now()
+);
+create index reader_nudges_to_idx on reader_nudges (to_user_id, created_at);
+```
+- **Delete-on-deliver:** when a poll returns a nudge to its recipient, that row is
+  **deleted in the same request**. Undelivered rows older than **60 s** are swept
+  (recipient wasn't online / didn't poll — nudge simply expires). Net effect: the table
+  holds at most a few seconds of in-flight nudges; `body` never outlives delivery.
+- This satisfies "not saved" while still crossing the poll gap. (A pure fire-and-forget
+  with zero storage isn't possible without websockets.)
 
-### 5.2 Stats needing finer capture (new)
+### 5.3 Send & deliver
+- **Send:** `POST /api/nudge` `{ toUserId, kind, body? }` → re-auth, validate
+  (`kind`, `body` length, recipient is a visible non-revoked reader, not self), insert
+  one row. **Rate limit:** max ~1 nudge / 3 s per (sender→recipient); reject spam with 429.
+- **Deliver:** folded into `GET /api/presence` — the response gains
+  `nudges: { fromName, kind, body }[]` for the viewer; those rows are deleted as they're
+  returned. No separate polling loop.
+- **Client:** a small `NudgeToaster` (mounted app-wide in the read layout) renders and
+  auto-dismisses incoming nudges; the reader popover hosts the send UI.
 
-**(a) Time per chapter.** Today `reading_time` is per **book**. Add per-chapter
-accumulation:
+### 5.4 Privacy / abuse
+- You can only bump/text a reader you can currently **see online** (so opt-out /
+  invisibility also means un-bumpable).
+- Rate-limited; `body` length-capped and treated as plain text (escaped on render).
+- No history means no audit trail — acceptable for a 4-person trusted circle; noted as a
+  deliberate trade-off. (A future "block" / "do not disturb" flag can extend §9.)
 
+---
+
+## 6. Feature C — Comprehensive progress tracker
+
+### 6.1 From existing data (no new capture)
+Overall %/chapters (`chapter_reads`), total time per book & grand total (`reading_time`),
+current position (`reading_progress`), books started/finished.
+
+### 6.2 New capture — rollups (decision #2)
+
+**(a) Time per chapter** — `reading_time` is per-book; add per-chapter:
 ```sql
 -- migration 0006_chapter_reading_time.sql
 create table chapter_reading_time (
-  user_id     uuid not null references users(id) on delete cascade,
-  chapter_id  uuid not null references chapters(id) on delete cascade,
-  book_id     uuid not null references books(id) on delete cascade,
+  user_id uuid not null references users(id) on delete cascade,
+  chapter_id uuid not null references chapters(id) on delete cascade,
+  book_id uuid not null references books(id) on delete cascade,
   total_seconds integer not null default 0,
-  updated_at  timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
   primary key (user_id, chapter_id)
 );
 create index chapter_reading_time_book_idx on chapter_reading_time (book_id);
 ```
 
-The reader already knows its current `chapterId`; extend the `flushTime` payload to
-`POST /api/reading-time` with `{ bookId, chapterId, seconds }` and have the route
-increment **both** `reading_time` (book total, unchanged) **and**
-`chapter_reading_time`. No new client timer — the existing active-seconds ticker
-already produces the number.
-
-**(b) Reading-hour distribution ("what hours you were reading at").** Bucket active
-seconds by hour-of-day. To keep it timezone-honest and cheap to query, accumulate
-into per-hour-of-week (or per-hour-of-day) buckets:
-
+**(b) Hourly-per-day reading (decision #4)** — keyed on day **and** hour so the UI can
+scroll day by day. This single table also yields daily totals and streaks, so **no
+separate `reading_days` table**:
 ```sql
--- migration 0007_reading_time_by_hour.sql
-create table reading_time_by_hour (
-  user_id      uuid not null references users(id) on delete cascade,
-  hour_of_day  smallint not null check (hour_of_day between 0 and 23),
-  total_seconds integer not null default 0,
-  primary key (user_id, hour_of_day)
+-- migration 0007_reading_time_hourly.sql
+create table reading_time_hourly (
+  user_id uuid not null references users(id) on delete cascade,
+  day date not null,                              -- reader-local date
+  hour_of_day smallint not null check (hour_of_day between 0 and 23),
+  seconds integer not null default 0,
+  primary key (user_id, day, hour_of_day)
 );
+create index reading_time_hourly_user_day_idx on reading_time_hourly (user_id, day);
 ```
+The reading-time flush sends `localDay` + `hourOfDay`; the route increments the matching
+`(user_id, day, hour_of_day)` bucket. Rows only exist for hours actually read, so it
+stays small (§8). Daily total = `sum(seconds) group by day`; streak = run of consecutive
+days present.
 
-Client sends its local `hourOfDay` (0-23) alongside the reading-time flush; the route
-increments the matching bucket. This yields a 24-bar "when I read" histogram per
-reader without storing a raw event log. *(If we later want day-of-week too, widen the
-PK to `(user_id, dow, hour_of_day)`.)*
+**(c) Derived (no tables):** avg time/chapter, est. time-to-finish, fastest/slowest
+chapter (from `chapter_reading_time`), last-read timestamp.
 
-**(c) Streaks & "days active".** Cheapest robust approach: a per-day activity table
-keyed on the reader's local date, upserted on any reading-time flush:
+> Rollup trade-off (locked #2): tiny + fast + matches the codebase, but not re-sliceable
+> (e.g. "hours by book"). Revisit an append-only event log only if arbitrary slicing is
+> ever needed.
 
-```sql
--- migration 0008_reading_days.sql
-create table reading_days (
-  user_id    uuid not null references users(id) on delete cascade,
-  day        date not null,          -- reader-local date
-  seconds    integer not null default 0,
-  primary key (user_id, day)
-);
-```
+### 6.3 UI
+- **Library menu:** add a **"Stats"** link (`app/read/page.tsx`, beside account).
+- **Overview — `app/read/stats/page.tsx`:** per-reader cards (avatar + online dot,
+  total time, books in progress/finished, current streak, last read), each linking to
+  detail. Reuses `BookReadersProgress` visual language.
+- **Detail — `app/read/stats/[userId]/page.tsx`:**
+  - Header: totals + streaks + online status.
+  - **Time-per-chapter** bars per book (fastest/slowest highlighted).
+  - **Hourly-per-day histogram:** a **24-bar day view** with **left/right day
+    navigation** (swipe / arrows) to scroll through history one day at a time; a small
+    date label + "today/yesterday". Backed by `reading_time_hourly` (one query per day
+    range).
+  - **Streak / activity calendar** derived from daily sums.
+  - **Per-book progress list** with est. time to finish.
+  - Respects the opt-out (§9).
+- Charts: hand-rolled **CSS/flex bars** (matches existing progress bars; no new dep).
 
-Current streak, longest streak, and a GitHub-style activity heatmap all derive from
-this. (Alternative: derive days from a raw session log, but per-day rollup is smaller
-and matches how the rest of the app aggregates.)
+`lib/data.ts`: `getReadingStatsOverview()`, `getReaderStats(userId)`,
+`getReaderHourly(userId, dayRange)`.
 
-**(d) Pace / derived metrics (no new tables):**
-- **Avg time per chapter** = `reading_time.total_seconds` / chapters read.
-- **Est. time to finish** = avg time/chapter × chapters remaining.
-- **Fastest/slowest chapter** = from `chapter_reading_time`.
-- **Last read** = `max(reading_progress.updated_at, reading_time.updated_at)`.
-
-> **Trade-off note.** (a)-(c) use pre-aggregated rollups instead of a raw
-> `reading_events` log. Rollups are tiny, fast to read, and match the app's existing
-> pattern — but they can't be re-sliced later (e.g. "reading by hour *per book*")
-> without adding a dimension. If future flexibility matters more than simplicity, a
-> single append-only `reading_events(user_id, book_id, chapter_id, seconds, at)` log
-> could back **all** of (a)-(c) via query-time aggregation at the cost of table
-> growth + heavier queries. **Recommendation: ship rollups for v1**, revisit an event
-> log only if we need arbitrary slicing.
-
-### 5.3 UI
-
-**Library menu entry.** Add a **"Stats" / "Reading activity"** link in the library
-(`app/read/page.tsx` header/menu, alongside the account link). Opens a new route.
-
-**Overview page — `app/read/stats/page.tsx` (server component):**
-- **Reader leaderboard / cards:** one card per reader — avatar (online dot if
-  present), total time, books in progress/finished, current streak, "last read".
-  Sorted by recent activity or total time (toggle).
-- **This week strip:** aggregate hours read across all readers, simple bars.
-- Each card is a `<Link>` into the detail page. Reuses `BookReadersProgress` visual
-  language for consistency.
-
-**Per-reader detail — `app/read/stats/[userId]/page.tsx`:**
-- Header: avatar, name, online status, totals (time, chapters, books, streaks).
-- **Time-per-chapter:** per-book breakdown, horizontal bars (from
-  `chapter_reading_time`), with fastest/slowest highlighted.
-- **Reading-hours histogram:** 24-bar chart (from `reading_time_by_hour`) — "reads
-  mostly at 11pm-1am".
-- **Activity heatmap / streak calendar:** from `reading_days`.
-- **Per-book progress list:** % complete, chapters read/total, current chapter, time,
-  est. time to finish.
-- Respects the share toggle (§8): a reader who's opted out shows only what they've
-  chosen to share (default: everything, since this is a trusted private circle).
-
-`lib/data.ts` additions (aggregation queries, all server-side / service role):
-- `getReadingStatsOverview()` → per-reader summary rows for the overview.
-- `getReaderStats(userId)` → full detail bundle (chapter times, hour buckets,
-  reading days, per-book progress) for the detail page.
-
-Charts: start with **CSS/flex bar charts** (no new dependency, matches the existing
-hand-rolled progress bars in `BookReadersProgress`). Only pull in a charting lib if
-the heatmap/histograms outgrow simple bars.
-
----
-
-## 6. Technical decisions
-
-### 6.1 Presence transport: polling vs. Supabase Realtime — **recommend polling**
-- **Polling (recommended):** heartbeat `POST` + `GET /api/presence` every ~20 s, tab
-  paused when hidden. Fits the app's **server-only** Supabase model perfectly (no
-  client DB access, service role stays server-side, RLS stays policy-less). Trivial
-  to reason about, cache, and rate-limit. At this user scale (a handful of readers)
-  the request volume is negligible.
-- **Supabase Realtime presence (alternative):** lower latency and no polling, but the
-  client lib is currently used **server-side only**; enabling Realtime means exposing
-  an anon/authenticated channel to the browser and reconciling it with the custom
-  HMAC-cookie auth (not Supabase Auth) and the policy-less RLS. That's a meaningful
-  security/architecture change for marginal benefit here.
-- **Decision:** polling for v1. Keep the presence read path behind one endpoint so we
-  can swap to Realtime later without touching UI.
-
-### 6.2 Reuse, don't duplicate, telemetry
-- Heartbeat rides the existing engagement ticker; per-chapter time and hour buckets
-  ride the existing `flushTime` payload. Net new client timers: **one** (the 30 s
-  heartbeat, and even that can share the ticker's `setInterval`).
-
-### 6.3 Consistency & correctness
-- All freshness/threshold math is **server-side** against `now()`.
-- Chapter→number resolution reuses one shared helper (factored out of
-  `getBookReadersProgress`) so presence, the "who's reading" widget, and stats never
-  disagree on chapter numbering.
-- Presence and stats are **readers-only**; admins excluded everywhere for parity with
-  today's behavior.
+Shared helper `chapterNumberMap(bookId)` (factored from `getBookReadersProgress`) is used
+by presence, the who's-reading widget, and stats so chapter numbering never disagrees.
 
 ---
 
@@ -408,82 +322,104 @@ the heatmap/histograms outgrow simple bars.
 |---|---|---|
 | Migration | `supabase/migrations/0005_reader_presence.sql` | new `reader_presence` |
 | Migration | `supabase/migrations/0006_chapter_reading_time.sql` | new `chapter_reading_time` |
-| Migration | `supabase/migrations/0007_reading_time_by_hour.sql` | new `reading_time_by_hour` |
-| Migration | `supabase/migrations/0008_reading_days.sql` | new `reading_days` |
-| Types | `lib/types.ts` | `ReaderPresence`, `PresenceEntry`, stats types |
-| Data layer | `lib/data.ts` | `getOnlinePresence`, `upsertPresence`, `getReadingStatsOverview`, `getReaderStats`; extend reading-time write to per-chapter + hour + day; factor out `numberById` helper |
-| API | `app/api/presence/route.ts` | new — `POST` heartbeat, `GET` presence |
-| API | `app/api/reading-time/route.ts` | extend payload → also write chapter/hour/day |
-| Presence UI | `components/PresenceCluster.tsx` | new — reader top-bar avatar cluster + popover |
+| Migration | `supabase/migrations/0007_reading_time_hourly.sql` | new `reading_time_hourly` |
+| Migration | `supabase/migrations/0008_reader_nudges.sql` | new `reader_nudges` |
+| Migration | `supabase/migrations/0009_reader_settings_share.sql` | `reader_settings.share_activity boolean not null default true` |
+| Types | `lib/types.ts` | `ReaderPresence`, `PresenceEntry`, nudge + stats types; add `share_activity` to `ReaderSettings` |
+| Data layer | `lib/data.ts` | `getOnlinePresence`, `upsertPresence`, `getReadingStatsOverview`, `getReaderStats`, `getReaderHourly`; extend reading-time write (chapter + hourly + presence); `chapterNumberMap` helper |
+| API | `app/api/reading-time/route.ts` | extend payload → time + chapter + hourly + presence in one write |
+| API | `app/api/presence/route.ts` | new — `GET` presence **+ nudge delivery (delete-on-deliver)** |
+| API | `app/api/nudge/route.ts` | new — `POST` send bump/text (rate-limited) |
+| Presence UI | `components/PresenceCluster.tsx` | new — reader top-bar cluster + popover + send UI |
 | Presence UI | `components/OnlineNowStrip.tsx` | new — library online strip (client poll) |
-| Reader | `components/ReaderView.tsx` | add heartbeat; mount `PresenceCluster` in `ml-auto` group (~L343-367) |
+| Nudge UI | `components/NudgeToaster.tsx` | new — app-wide ephemeral toast (auto-dismiss) |
+| Reader | `components/ReaderView.tsx` | extend `flushTime` payload; mount `PresenceCluster` (~L343-367) |
 | Reader | `components/WebtoonReaderView.tsx` | same (header ~L198) |
-| Library | `app/read/page.tsx` | render `OnlineNowStrip`; per-card "reading now"; add **Stats** menu link |
-| TOC | `app/read/[bookId]/page.tsx` + `components/BookReadersProgress.tsx` | add live online dots to "Who's reading" |
-| Chapter route | `app/read/[bookId]/[chapterId]/page.tsx` | pass initial presence snapshot to reader |
-| Stats | `app/read/stats/page.tsx` | new — overview |
-| Stats | `app/read/stats/[userId]/page.tsx` | new — per-reader detail |
-| Middleware | `proxy.ts` | no change (`/read/:path*` already matched; `/api/*` re-auths itself) |
+| Layout | read layout (e.g. `app/read/layout.tsx`) | mount `NudgeToaster` + shared presence poll |
+| Library | `app/read/page.tsx` | `OnlineNowStrip`; per-card "reading now"; **Stats** link |
+| TOC | `app/read/[bookId]/page.tsx` + `components/BookReadersProgress.tsx` | live online dots |
+| Chapter route | `app/read/[bookId]/[chapterId]/page.tsx` | pass initial presence snapshot |
+| Stats | `app/read/stats/page.tsx`, `app/read/stats/[userId]/page.tsx` | new — overview + detail (day-scroll histogram) |
+| Settings | `app/read/account` + `app/api/settings/route.ts` | `share_activity` toggle |
+
+`proxy.ts` unchanged (`/read/:path*` already matched; `/api/*` re-auths itself).
 
 ---
 
-## 8. Privacy & permissions
-- **Trusted private circle** is the baseline assumption (invite-only reader group), so
-  default is **share everything with other readers**.
-- Add one per-reader **"Show my reading activity to others"** toggle (default on) in
-  `reader_settings` (`share_activity boolean not null default true`) surfaced on
-  `app/read/account`. When off: the reader is omitted from presence lists and shows as
-  "private" in stats (their own view still shows their data).
-- Honor existing `cal_mode`/explicit-access visibility: never leak a chapter title or
-  spicy-chapter presence to a viewer who couldn't otherwise see it (see §4.6).
-- Admins are excluded from the social layer entirely.
+## 8. Free-tier budget (Vercel + Supabase)
+
+Scale: **4 readers × 2 h/day × 30 days = 240 reader-hours/month.**
+
+Requests per active reader-hour (folded design, 15 s cadence):
+
+| Source | Rate | Notes |
+|---|---|---|
+| Reading-time flush = time + chapter + hourly + **presence** | 240/hr | one POST does all |
+| Presence poll GET (+ nudge delivery) | 240/hr | 15 s |
+| Progress writes (scroll, debounced) | ~100/hr | existing, bursty |
+| Nudge sends | ~0 | a handful/day |
+| **Total** | **~580/hr** | |
+
+Monthly: 240 × 580 ≈ **139,000 requests/month**.
+
+| Limit (approx, verify current) | Allowance | This design | Headroom |
+|---|---|---|---|
+| Vercel Edge Requests | ~1,000,000/mo | ~140k (+ page loads) ≈ **~15%** | ✅ |
+| Vercel Function Invocations | ~1,000,000/mo | ~140k ≈ **~14%** | ✅ |
+| Vercel Fast Data Transfer | 100 GB/mo | JSON only, <1 GB | ✅ |
+| Vercel Edge Middleware | ~1,000,000/mo | page loads only (`/api/*` skips middleware) | ✅ |
+| Supabase Egress | 5 GB/mo | 139k × ~2 KB ≈ **~0.3 GB** | ✅ |
+| Supabase DB size | 500 MB | new tables ≈ KB–low MB (see below) | ✅ |
+| Supabase API requests | uncapped | — | ✅ |
+
+**New storage/year (4 readers):** `reading_time_hourly` ≈ 4 × 365 × (few active
+hours/day) ≈ low thousands of rows; `chapter_reading_time` ≈ 4 × chapters read;
+`reader_presence` = 4 rows; `reader_nudges` ≈ near-zero (delete-on-deliver). **Total:
+kilobytes.** Book `content` text remains the only real DB consumer.
+
+> Verdict: comfortably inside every free-tier limit — well under 20% of Vercel's request
+> ceilings and a rounding error on Supabase. The 15 s cadence is affordable at 4 users;
+> if the circle ever grows, the cheap levers are (a) 15 s → 30 s poll, (b) cache
+> `GET /api/presence` ~10 s, (c) pause polling on hidden tabs (already planned).
+>
+> Note: Vercel Hobby is personal/non-commercial use only, which a private reader satisfies.
 
 ---
 
-## 9. Phasing
-
-**Milestone 1 — Presence core**
-- Migration `0005`; `POST/GET /api/presence`; heartbeat in `ReaderView` +
-  `WebtoonReaderView`; `PresenceCluster` (green dot + same-book ring + chapter badge);
-  `OnlineNowStrip` in library; live dots on "Who's reading". *Ships the top-bar icon
-  and "who's online" experience.*
-
-**Milestone 2 — Finer capture**
-- Migrations `0006`-`0008`; extend reading-time write to per-chapter + hour + day.
-  *(Backfill: existing per-book totals stay; per-chapter/hour/day accrue from launch —
-  note in UI that fine-grained history "starts now".)*
-
-**Milestone 3 — Stats dashboard**
-- `getReadingStatsOverview` / `getReaderStats`; `/read/stats` overview +
-  `/read/stats/[userId]` detail; Stats menu link; CSS bar charts, hour histogram,
-  streak heatmap.
-
-**Milestone 4 — Polish**
-- Away/idle amber state; share-activity toggle; per-card "reading now" on library;
-  poll-pause on hidden tab; empty states; a11y (labels for dots/badges).
+## 9. Privacy & permissions
+- Baseline: trusted invite-only circle → default **share on**.
+- **Opt-out toggle** (decision #3): `reader_settings.share_activity` (default `true`),
+  surfaced on `app/read/account`. When off, the reader is omitted from presence lists,
+  shows as "private" in stats (still sees their own data), and — since others can't see
+  them online — **cannot be bumped**.
+- Honor `cal_mode` / explicit-access: never leak a chapter title or spicy-chapter
+  presence to a viewer who couldn't otherwise see it.
+- Nudges: rate-limited, length-capped, plain-text-escaped, purged on delivery, only to
+  visible readers. Admins excluded from the whole social layer.
 
 ---
 
-## 10. Open questions
-1. **Away state in v1?** Ship online/offline only, or include the amber "away" tier
-   from the start? (Recommend: online/offline for M1, amber in M4.)
-2. **Count library browsing as "online"?** Requires a lightweight heartbeat on the
-   library page too. (Recommend: yes, small, do it in M1.)
-3. **Rollups vs. raw event log** for stats (§5.2 trade-off) — confirm rollups are
-   acceptable (recommended) vs. wanting a re-sliceable `reading_events` log.
-4. **Default privacy** — confirm "share everything by default" matches your intent for
-   this circle, with an opt-out toggle.
-5. **Hour histogram granularity** — hour-of-day only, or hour × day-of-week?
-6. **Avatars** — stick with initial-letter avatars (current pattern), or add optional
-   uploaded/emoji avatars as a follow-up?
+## 10. Phasing
+1. **Presence core** — migrations `0005`, `0009`; fold presence into reading-time flush;
+   `GET /api/presence`; `PresenceCluster` (dot + same-book ring + chapter badge);
+   `OnlineNowStrip`; live dots on "Who's reading". *(Ships the top-bar icon + who's-online.)*
+2. **Nudges** — migration `0008`; `POST /api/nudge` + delivery via presence poll;
+   `NudgeToaster` + send UI in the popover.
+3. **Capture** — migrations `0006`, `0007`; extend reading-time write to per-chapter +
+   hourly-per-day. *(Fine-grained history "starts now"; per-book totals unaffected.)*
+4. **Stats dashboard** — `getReadingStatsOverview` / `getReaderStats` / `getReaderHourly`;
+   `/read/stats` overview + `/read/stats/[userId]` detail with the **day-scroll hourly
+   histogram**; Stats menu link.
+5. **Polish** — opt-out toggle UI, empty states, a11y labels for dots/badges/toasts,
+   visibility-pause on polling.
 
 ---
 
-## 11. Rough estimate (relative)
-- **M1 Presence:** ~1 migration, 1 endpoint, 2 client components, ticker edits, 3
-  surfaces. Small-to-medium.
-- **M2 Capture:** 3 tiny migrations + one route extension. Small.
-- **M3 Stats:** 2 aggregation queries + 2 pages + charts. Medium.
-- **M4 Polish:** small, incremental.
-
-The heavy lifting is UI; the data model is a light extension of what already exists.
+## 11. Open questions (remaining)
+1. **Bump copy & style** — canned bump wording/emoji, and toast durations (5 s bump /
+   8 s text) — fine as proposed, or tune?
+2. **History depth** for the day-scroll histogram — scroll back indefinitely, or cap
+   (e.g. last 90 days)?
+3. **Nudge while offline** — silently expire (current design), or show "delivered when
+   they're next online"? (Current: expire, to honor "not saved".)
+4. **Avatars** — keep initial-letter avatars, or add optional emoji/photo avatars later?
