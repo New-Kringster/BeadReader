@@ -50,6 +50,7 @@ export default function WebtoonReaderView({
   initialScrollFraction,
   currentUserId,
   isAdmin,
+  adminPreview = false,
 }: {
   bookId: string;
   bookTitle: string;
@@ -64,6 +65,7 @@ export default function WebtoonReaderView({
   initialScrollFraction: number;
   currentUserId: string;
   isAdmin: boolean;
+  adminPreview?: boolean;
 }) {
   const router = useRouter();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -75,6 +77,14 @@ export default function WebtoonReaderView({
   const [isNavigating, startNav] = useTransition();
   const [pendingId, setPendingId] = useState<string | null>(null);
   const readSet = new Set(readIds);
+  const bookHref = adminPreview ? `/admin/books/${bookId}` : `/read/${bookId}`;
+  const chapterHref = useCallback(
+    (chapterId: string) =>
+      adminPreview
+        ? `/admin/books/${bookId}/chapters/${chapterId}/preview`
+        : `/read/${bookId}/${chapterId}`,
+    [adminPreview, bookId]
+  );
 
   useEffect(() => {
     postJSON("/api/read", { bookId, chapterId: chapter.id });
@@ -167,9 +177,9 @@ export default function WebtoonReaderView({
       }
       flushTime(true);
       setPendingId(id);
-      startNav(() => router.push(`/read/${bookId}/${id}`));
+      startNav(() => router.push(chapterHref(id)));
     },
-    [bookId, flushTime, router, saveProgress]
+    [chapterHref, flushTime, router, saveProgress]
   );
 
   useEffect(() => {
@@ -186,7 +196,7 @@ export default function WebtoonReaderView({
     <div className="fixed inset-0 flex flex-col bg-black text-white">
       <NavProgress active={isNavigating} />
       <header className={`h-12 shrink-0 border-b border-white/20 bg-black flex items-center gap-3 px-4 text-sm transition-opacity ${chrome ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
-        <Link href={`/read/${bookId}`} className="hover:underline min-w-0 truncate">← {bookTitle}</Link>
+        <Link href={bookHref} className="hover:underline min-w-0 truncate">← {bookTitle}</Link>
         <span className="opacity-60 truncate hidden sm:inline">/ {chapter.title}</span>
         <button className="reader-icon ml-auto" onClick={() => setShowToc(true)} title="Contents">☰</button>
       </header>

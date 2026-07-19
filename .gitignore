@@ -42,3 +42,6 @@ next-env.d.ts
 
 # Playwright MCP artifacts (screenshots, snapshots)
 .playwright-mcp/
+
+# Local generated demo artwork (uploaded to R2, not committed)
+/output/imagegen/

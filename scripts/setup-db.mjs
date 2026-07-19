@@ -63,7 +63,9 @@ try {
     `create table if not exists public.schema_migrations (
        name text primary key,
        applied_at timestamptz not null default now()
-     )`
+     );
+     alter table public.schema_migrations enable row level security;
+     revoke all on table public.schema_migrations from anon, authenticated`
   );
 
   const files = readdirSync(migrationsDir)

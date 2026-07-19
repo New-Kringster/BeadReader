@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
+import Link from "next/link";
 import SubmitButton from "@/components/SubmitButton";
 import {
   naturalSortFiles,
@@ -334,7 +335,17 @@ export default function WebtoonChapterEditor({
         )}
 
         <div>
-          <h3 className="font-semibold mb-3">Saved images ({images.length})</h3>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <h3 className="font-semibold">Saved images ({images.length})</h3>
+            {images.length > 0 && (
+              <Link
+                href={`/admin/books/${chapter.book_id}/chapters/${chapter.id}/preview`}
+                className="btn btn-sm"
+              >
+                Preview chapter →
+              </Link>
+            )}
+          </div>
           {images.length === 0 ? (
             <p className="text-sm text-muted py-5">No images yet. This chapter must have at least one before it can be published.</p>
           ) : (
