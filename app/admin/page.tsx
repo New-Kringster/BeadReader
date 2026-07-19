@@ -42,6 +42,7 @@ export default async function AdminDashboard() {
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="font-semibold truncate">{book.title}</span>
                   <span className={`badge badge-${book.status} shrink-0`}>{book.status}</span>
+                  {book.format === "webtoon" && <span className="badge badge-draft shrink-0">webtoon</span>}
                 </div>
                 <div className="text-sm text-muted truncate">
                   {book.author || "Unknown author"} · {counts[i]} chapter

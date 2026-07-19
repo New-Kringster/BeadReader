@@ -6,10 +6,12 @@ export default function BookForm({
   action,
   book,
   submitLabel,
+  webtoonEnabled = false,
 }: {
   action: (formData: FormData) => Promise<void>;
   book?: Book;
   submitLabel: string;
+  webtoonEnabled?: boolean;
 }) {
   return (
     <form action={action} className="space-y-5">
@@ -35,6 +37,28 @@ export default function BookForm({
       </div>
 
       <CoverField currentUrl={book?.cover_url} />
+
+      <div>
+        <label htmlFor="format" className="label">Book format</label>
+        {book ? (
+          <div className="field bg-line/20" aria-label="Book format">
+            {book.format === "webtoon" ? "Webtoon — ordered images" : "Text — Markdown chapters"}
+          </div>
+        ) : (
+          <>
+            <select id="format" name="format" className="field" defaultValue="text">
+              <option value="text">Text — Markdown chapters</option>
+              <option value="webtoon" disabled={!webtoonEnabled}>
+                Webtoon — ordered images{webtoonEnabled ? "" : " (R2 setup required)"}
+              </option>
+            </select>
+            <p className="text-xs text-muted mt-2">
+              This choice is permanent for the book. Text publishing always works; webtoons are
+              available when optional Cloudflare R2 storage is configured.
+            </p>
+          </>
+        )}
+      </div>
 
       <div>
         <label htmlFor="status" className="label">Status</label>

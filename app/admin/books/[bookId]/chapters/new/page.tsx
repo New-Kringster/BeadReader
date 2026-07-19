@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getBook } from "@/lib/data";
 import ChapterEditor from "@/components/ChapterEditor";
+import WebtoonChapterSetup from "@/components/WebtoonChapterSetup";
 import { createChapterAction } from "@/app/actions/chapters";
 
 export default async function NewChapterPage({
@@ -19,7 +20,11 @@ export default async function NewChapterPage({
         ← {book.title}
       </Link>
       <h1 className="text-2xl font-bold my-4">New chapter</h1>
-      <ChapterEditor action={createChapterAction.bind(null, bookId)} />
+      {book.format === "webtoon" ? (
+        <WebtoonChapterSetup action={createChapterAction.bind(null, bookId)} />
+      ) : (
+        <ChapterEditor action={createChapterAction.bind(null, bookId)} />
+      )}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import {
   getPublishedBook,
@@ -6,8 +7,11 @@ import {
   getSettings,
   getProgress,
   listReadChapterIds,
+  listChapterImages,
 } from "@/lib/data";
 import ReaderView from "@/components/ReaderView";
+import WebtoonReaderView from "@/components/WebtoonReaderView";
+import { getR2PublicUrl, hasR2PublicBaseUrl } from "@/lib/r2";
 
 export default async function ReadingPage({
   params,
@@ -31,13 +35,51 @@ export default async function ReadingPage({
   const prev = index > 0 ? chapters[index - 1] : null;
   const next = index < chapters.length - 1 ? chapters[index + 1] : null;
 
-  const [settings, progress, readIds] = await Promise.all([
+  const [settings, progress, readIds, images] = await Promise.all([
     getSettings(user.id),
     getProgress(user.id, bookId),
     listReadChapterIds(user.id, bookId),
+    book.format === "webtoon" ? listChapterImages(current.id) : Promise.resolve([]),
   ]);
 
   const isThisChapter = progress?.chapter_id === chapterId;
+
+  if (book.format === "webtoon") {
+    if (!hasR2PublicBaseUrl()) {
+      return (
+        <main className="min-h-screen grid place-items-center bg-black text-white p-6 text-center">
+          <div>
+            <h1 className="text-xl font-semibold">Artwork temporarily unavailable</h1>
+            <p className="text-white/60 mt-2">The owner needs to reconnect this book&apos;s image storage.</p>
+            <Link href={`/read/${bookId}`} className="reader-btn mt-5">Back to contents</Link>
+          </div>
+        </main>
+      );
+    }
+    return (
+      <WebtoonReaderView
+        bookId={bookId}
+        bookTitle={book.title}
+        chapter={{ id: current.id, title: current.title }}
+        images={images.map((image) => ({
+          id: image.id,
+          url: getR2PublicUrl(image.object_key),
+          width: image.width,
+          height: image.height,
+          originalFilename: image.original_filename,
+        }))}
+        prev={prev ? { id: prev.id, title: prev.title } : null}
+        next={next ? { id: next.id, title: next.title } : null}
+        index={index + 1}
+        total={chapters.length}
+        toc={chapters.map((chapterItem) => ({ id: chapterItem.id, title: chapterItem.title, spicy: chapterItem.has_spicy }))}
+        readIds={readIds}
+        initialScrollFraction={isThisChapter ? Number(progress?.scroll_fraction ?? 0) : 0}
+        currentUserId={user.id}
+        isAdmin={user.role === "admin"}
+      />
+    );
+  }
 
   return (
     <ReaderView
