@@ -3,8 +3,15 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { supabaseAdmin, COVERS_BUCKET } from "@/lib/supabase";
-import { createBook, updateBook, deleteBook, getBook } from "@/lib/data";
-import type { PublishStatus } from "@/lib/types";
+import {
+  createBook,
+  updateBook,
+  deleteBook,
+  getBook,
+  listBookImageObjectKeys,
+} from "@/lib/data";
+import { deleteR2Objects, isR2Configured } from "@/lib/r2";
+import type { BookFormat, PublishStatus } from "@/lib/types";
 
 async function uploadCover(file: File): Promise<string | null> {
   if (!file || file.size === 0) return null;
@@ -31,8 +38,16 @@ function readBookFields(formData: FormData) {
 export async function createBookAction(formData: FormData): Promise<void> {
   await requireAdmin();
   const fields = readBookFields(formData);
+  const requestedFormat = formData.get("format") === "webtoon" ? "webtoon" : "text";
+  if (requestedFormat === "webtoon" && !isR2Configured()) {
+    throw new Error("Configure Cloudflare R2 before creating a webtoon book.");
+  }
   const cover_url = await uploadCover(formData.get("cover") as File);
-  const book = await createBook({ ...fields, cover_url });
+  const book = await createBook({
+    ...fields,
+    cover_url,
+    format: requestedFormat as BookFormat,
+  });
   revalidatePath("/admin");
   redirect(`/admin/books/${book.id}`);
 }
@@ -56,6 +71,8 @@ export async function removeCoverAction(bookId: string): Promise<void> {
 export async function deleteBookAction(bookId: string): Promise<void> {
   await requireAdmin();
   const book = await getBook(bookId);
+  const imageKeys = book?.format === "webtoon" ? await listBookImageObjectKeys(bookId) : [];
+  await deleteR2Objects(imageKeys);
   await deleteBook(bookId);
   if (book?.cover_url) {
     const file = book.cover_url.split(`${COVERS_BUCKET}/`).pop();

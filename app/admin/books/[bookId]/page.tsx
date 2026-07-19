@@ -22,6 +22,9 @@ export default async function EditBookPage({
       <div>
         <Link href="/admin" className="text-sm text-muted hover:underline">← Books</Link>
         <h1 className="text-2xl font-bold mt-2">{book.title}</h1>
+        <p className="text-sm text-muted mt-1">
+          {book.format === "webtoon" ? "Webtoon book" : "Text book"}
+        </p>
       </div>
 
       {/* Chapters */}

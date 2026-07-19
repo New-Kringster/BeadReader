@@ -6,6 +6,7 @@ import {
   DEFAULT_SETTINGS,
   type Book,
   type Chapter,
+  type ChapterImage,
   type ReaderSettings,
   type ReadingProgress,
   type Role,
@@ -57,6 +58,7 @@ export async function createBook(fields: Partial<Book>): Promise<Book> {
       description: fields.description ?? null,
       cover_url: fields.cover_url ?? null,
       status: fields.status ?? "draft",
+      format: fields.format ?? "text",
     })
     .select("*")
     .single();
@@ -70,7 +72,8 @@ export async function updateBook(id: string, fields: Partial<Book>): Promise<voi
 }
 
 export async function deleteBook(id: string): Promise<void> {
-  await supabaseAdmin.from("books").delete().eq("id", id);
+  const { error } = await supabaseAdmin.from("books").delete().eq("id", id);
+  if (error) throw error;
 }
 
 // ============================================================
@@ -244,7 +247,8 @@ export async function updateChapter(id: string, fields: Partial<Chapter>): Promi
 }
 
 export async function deleteChapter(id: string): Promise<void> {
-  await supabaseAdmin.from("chapters").delete().eq("id", id);
+  const { error } = await supabaseAdmin.from("chapters").delete().eq("id", id);
+  if (error) throw error;
 }
 
 /** Persist a new chapter order (array of chapter ids in the desired order). */
@@ -254,6 +258,84 @@ export async function reorderChapters(bookId: string, orderedIds: string[]): Pro
       supabaseAdmin.from("chapters").update({ position: index }).eq("id", id).eq("book_id", bookId)
     )
   );
+}
+
+// ============================================================
+// Webtoon chapter images (metadata only; image bytes live in Cloudflare R2)
+// ============================================================
+export async function listChapterImages(chapterId: string): Promise<ChapterImage[]> {
+  const { data, error } = await supabaseAdmin
+    .from("chapter_images")
+    .select("*")
+    .eq("chapter_id", chapterId)
+    .order("position", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as ChapterImage[];
+}
+
+export async function addChapterImages(
+  chapterId: string,
+  images: Array<Omit<ChapterImage, "id" | "chapter_id" | "position" | "created_at">>
+): Promise<ChapterImage[]> {
+  if (images.length === 0) return [];
+  const existing = await listChapterImages(chapterId);
+  const start = existing.length;
+  const { data, error } = await supabaseAdmin
+    .from("chapter_images")
+    .insert(images.map((image, offset) => ({ ...image, chapter_id: chapterId, position: start + offset })))
+    .select("*");
+  if (error) throw error;
+  return (data ?? []) as ChapterImage[];
+}
+
+export async function getChapterImage(id: string): Promise<ChapterImage | null> {
+  const { data, error } = await supabaseAdmin
+    .from("chapter_images")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as ChapterImage) ?? null;
+}
+
+export async function deleteChapterImage(id: string): Promise<void> {
+  const { error } = await supabaseAdmin.from("chapter_images").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function reorderChapterImages(chapterId: string, orderedIds: string[]): Promise<void> {
+  const current = await listChapterImages(chapterId);
+  if (
+    current.length !== orderedIds.length ||
+    current.some((image) => !orderedIds.includes(image.id))
+  ) {
+    throw new Error("Image order did not match this chapter.");
+  }
+
+  // Move to unique temporary positions first to avoid violating the
+  // (chapter_id, position) constraint while two rows swap places.
+  for (let index = 0; index < orderedIds.length; index++) {
+    const { error } = await supabaseAdmin
+      .from("chapter_images")
+      .update({ position: 1_000_000 + index })
+      .eq("id", orderedIds[index])
+      .eq("chapter_id", chapterId);
+    if (error) throw error;
+  }
+  for (let index = 0; index < orderedIds.length; index++) {
+    const { error } = await supabaseAdmin
+      .from("chapter_images")
+      .update({ position: index })
+      .eq("id", orderedIds[index])
+      .eq("chapter_id", chapterId);
+    if (error) throw error;
+  }
+}
+
+export async function listBookImageObjectKeys(bookId: string): Promise<string[]> {
+  const chapters = await listChapters(bookId);
+  const imageLists = await Promise.all(chapters.map((chapter) => listChapterImages(chapter.id)));
+  return imageLists.flat().map((image) => image.object_key);
 }
 
 // ============================================================

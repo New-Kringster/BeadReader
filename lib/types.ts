@@ -1,6 +1,7 @@
 export type Role = "admin" | "reader";
 export type PublishStatus = "draft" | "published";
 export type Layout = "scroll" | "page";
+export type BookFormat = "text" | "webtoon";
 
 export interface User {
   id: string;
@@ -23,8 +24,22 @@ export interface Book {
   cover_url: string | null;
   description: string | null;
   status: PublishStatus;
+  format: BookFormat;
   created_at: string;
   updated_at: string;
+}
+
+export interface ChapterImage {
+  id: string;
+  chapter_id: string;
+  position: number;
+  object_key: string;
+  original_filename: string;
+  mime_type: "image/jpeg" | "image/png" | "image/webp";
+  width: number;
+  height: number;
+  byte_size: number;
+  created_at: string;
 }
 
 export interface Chapter {

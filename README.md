@@ -1,7 +1,7 @@
 # 📖 BeadReader
 
-A small, private online book reader. An **admin** publishes books and chapters
-(written in Markdown); **readers** log in with a single access code and read —
+A small, private online book reader. An **admin** publishes text books in Markdown
+or optional image-based webtoons; **readers** log in with a single access code and read —
 with the app remembering exactly where each reader left off.
 
 Built with **Next.js (App Router) + Tailwind CSS v4 + Supabase (Postgres + Storage)**.
@@ -44,7 +44,10 @@ adding books and readers. That's the entire setup.
   (admin or reader) + explicit-content access. Session persists in a signed cookie.
 - **Admin**
   - Book CRUD (title, author, cover image, description, draft/published).
+  - Choose an immutable **Text** or **Webtoon** format when a book is created.
   - Markdown chapter editor with **live side-by-side preview**.
+  - Optional webtoon editor: select a numbered image folder, preview its natural
+    order, upload directly to Cloudflare R2, reorder, retry, and delete images.
   - Reorder / delete chapters; per-chapter **draft/published** and **Explicit ("spicy")** toggle.
   - Reader management: create readers (auto-generates a code to share), copy /
     regenerate / revoke codes, toggle each reader's spicy access or **cal mode**,
@@ -55,6 +58,8 @@ adding books and readers. That's the entire setup.
   - Library of published books; drafts are invisible.
   - Immersive reading view: adjustable background/text colour, font size, and
     **scroll vs. paginated** layout — all saved per user.
+  - Webtoon chapters use a phone-friendly, gapless vertical image strip with the
+    same resume, read tracking, comments, spicy gating, and chapter navigation.
   - **Auto-resume**: opening a book jumps straight to the exact chapter and
     scroll/page position last reached.
   - **Contents with read tracking**: the chapter list marks a 🌶 on spicy
@@ -113,6 +118,10 @@ npm run dev                  # http://localhost:3000
 | `SESSION_SECRET` | Any long random string. Generate with `openssl rand -hex 32`. |
 | `BOOTSTRAP_ADMIN_CODE` | *(optional)* the access code for the first admin, used by `npm run bootstrap` and by the one-click deploy's auto-setup. |
 
+The five `R2_*` variables in `.env.example` are optional and are needed only for
+webtoon publishing. A deployment with none of them remains a fully functional
+text-book reader, and the New Book screen explains why the Webtoon choice is unavailable.
+
 > `.env.local` is git-ignored. Never commit the `service_role` key.
 >
 > On the [one-click deploy](#-deploy-your-own-one-click), `SUPABASE_URL` and
@@ -167,6 +176,43 @@ To wire it up manually instead:
 
 That's it — no other infrastructure. Cover images are stored in the Supabase
 `covers` bucket and served from its public URL.
+
+### Optional: enable webtoon publishing with Cloudflare R2
+
+The ordinary one-click deployment above does **not** require Cloudflare. To add
+webtoons later:
+
+1. In Cloudflare, create a Standard R2 bucket and an R2 API token with Object Read
+   & Write access for that bucket. Copy the account ID, access key ID, and secret.
+2. Attach a custom domain to the bucket. Put its origin (for example,
+   `https://images.example.com`) in `R2_PUBLIC_BASE_URL`.
+3. Add this CORS policy to the bucket, replacing the example origins with the
+   production and preview origins that contain your admin editor:
+
+   ```json
+   [
+     {
+       "AllowedOrigins": ["https://reader.example.com", "http://localhost:3000"],
+       "AllowedMethods": ["PUT"],
+       "AllowedHeaders": ["Content-Type"],
+       "ExposeHeaders": ["ETag"],
+       "MaxAgeSeconds": 3600
+     }
+   ]
+   ```
+
+4. Add `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
+   `R2_BUCKET_NAME`, and `R2_PUBLIC_BASE_URL` to the Vercel project, then redeploy.
+
+Uploads go directly from the signed-in admin browser to R2 using short-lived PUT
+URLs. Supabase stores only ordered metadata. Reading uses the R2 custom domain;
+the presigned upload URL itself uses Cloudflare's S3-compatible endpoint.
+
+For artwork, use 1080×1920 px portrait images where possible and name a flat
+chapter folder `001`, `002`, `003`, and so on. BeadReader preserves natural order,
+reduces images wider than 1080 px, and converts uploads to delivery-friendly WebP.
+Dialogue must already be baked into each image. The complete story-to-folder
+workflow and reusable ChatGPT prompt are in [docs/webtoon-image-prompt.md](docs/webtoon-image-prompt.md).
 
 ---
 

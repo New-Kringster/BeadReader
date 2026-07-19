@@ -69,7 +69,7 @@ create table public.chapter_images (
   mime_type text not null,
   width integer not null check (width > 0),
   height integer not null check (height > 0),
-  byte_size integer not null check (byte_size > 0),
+  byte_size bigint not null check (byte_size > 0),
   created_at timestamptz not null default now(),
   unique (chapter_id, position)
 );
@@ -78,9 +78,15 @@ create index chapter_images_chapter_idx
   on public.chapter_images(chapter_id, position);
 
 alter table public.chapter_images enable row level security;
+
+grant usage on schema public to service_role;
+grant select, insert, update, delete on table public.chapter_images to service_role;
 ```
 
-As with the existing schema, RLS is enabled with no public policies because all database access uses the server-side service-role client.
+The migration also installs a database trigger that rejects any later change to
+`books.format`. As with the existing schema, RLS is enabled with no public policies
+because all database access uses the server-side service-role client. The explicit
+grant keeps new Supabase projects compatible with the 2026 Data API grant behavior.
 
 Application types add:
 
@@ -129,7 +135,7 @@ The README and `.env.example` document R2 as optional. The ordinary Vercel deplo
 
 ## Storage Module
 
-`lib/webtoon-storage.ts` owns all R2-specific behavior:
+`lib/r2.ts` owns all R2-specific behavior:
 
 - configuration detection;
 - S3-compatible R2 client creation;
