@@ -107,86 +107,48 @@ adding books and readers. That's the entire setup.
 
 ## Screenshots
 
-A visual tour of the app — no deploy needed. Light and dark themes are shown side by side.
+A visual tour of the app — no deploy needed. Light and dark themes both shown.
 
-### Library
+<table>
+  <tr>
+    <td width="33%" align="center"><img src="docs/screenshots/login-light.png" width="100%" alt="Login" /><br/><sub><b>Login</b></sub></td>
+    <td width="33%" align="center"><img src="docs/screenshots/library-light.png" width="100%" alt="Library (light)" /><br/><sub><b>Library</b> · light</sub></td>
+    <td width="33%" align="center"><img src="docs/screenshots/library-dark.png" width="100%" alt="Library (dark)" /><br/><sub><b>Library</b> · dark</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/contents-light.png" width="100%" alt="Book contents" /><br/><sub><b>Book page</b> — who's reading + chapters</sub></td>
+    <td align="center"><img src="docs/screenshots/reader-paper.png" width="100%" alt="Reader (paper)" /><br/><sub><b>Reader</b> · paper</sub></td>
+    <td align="center"><img src="docs/screenshots/reader-dark.png" width="100%" alt="Reader (dark)" /><br/><sub><b>Reader</b> · dark</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/webtoon.png" width="100%" alt="Webtoon reader" /><br/><sub><b>Webtoon reader</b></sub></td>
+    <td align="center"><img src="docs/screenshots/stats-overview-light.png" width="100%" alt="Reading stats — overview" /><br/><sub><b>Reading stats</b> — everyone</sub></td>
+    <td align="center"><img src="docs/screenshots/stats-detail-light.png" width="100%" alt="Reading stats — detail" /><br/><sub><b>Reading stats</b> — per reader</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/account-light.png" width="100%" alt="Account (light)" /><br/><sub><b>Account</b> · light</sub></td>
+    <td align="center"><img src="docs/screenshots/account-dark.png" width="100%" alt="Account (dark)" /><br/><sub><b>Account</b> · dark</sub></td>
+    <td align="center"><img src="docs/screenshots/changelog-light.png" width="100%" alt="Changelog" /><br/><sub><b>Changelog</b></sub></td>
+  </tr>
+</table>
 
-Your books, plus an "Online now" strip showing who else is reading and what they're on.
+**Reading together** — a green dot = online; a green ring + number = same book, same chapter. Tap the cluster to bump a friend or send a quick, disappearing note.
 
-<p align="center">
-  <img src="docs/screenshots/library-light.png" width="49%" alt="Library (light)" />
-  <img src="docs/screenshots/library-dark.png" width="49%" alt="Library (dark)" />
-</p>
+<table>
+  <tr>
+    <td width="58%" align="center"><img src="public/changelog/presence-reader.png" width="100%" alt="Presence at the top of the reader" /><br/><sub>Presence at the top of the reader</sub></td>
+    <td width="42%" align="center"><img src="public/changelog/reader-menu.png" width="100%" alt="Bump & quick-message menu" /><br/><sub>Bump &amp; quick-message menu</sub></td>
+  </tr>
+</table>
 
-### The reader
+**Admin** — the owner's side: book management, and reader management (share codes, spicy / cal-mode toggles, revoke).
 
-An immersive, distraction-free reader (adjustable colours, font size, scroll/paginated),
-a dark reading theme, and a vertical webtoon reader — each showing who's around at the top.
-
-<p align="center">
-  <img src="docs/screenshots/reader-paper.png" width="32%" alt="Text reader (paper)" />
-  <img src="docs/screenshots/reader-dark.png" width="32%" alt="Text reader (dark)" />
-  <img src="docs/screenshots/webtoon.png" width="32%" alt="Webtoon reader" />
-</p>
-
-### Reading together
-
-A green dot means someone's online; a green ring + number means they're in the *same*
-book, on that chapter. Tap the cluster to bump a friend or send a quick, disappearing note.
-
-<p align="center">
-  <img src="public/changelog/presence-reader.png" width="60%" alt="Presence in the reader" />
-</p>
-<p align="center">
-  <img src="public/changelog/reader-menu.png" width="46%" alt="Bump & quick message menu" />
-</p>
-
-### Book page
-
-Book contents with a "Who's reading" widget (live "reading now" dots + progress) and the
-chapter list with read tracking and 🌶 spicy markers.
-
-<p align="center">
-  <img src="docs/screenshots/contents-light.png" width="49%" alt="Book contents (light)" />
-  <img src="docs/screenshots/contents-dark.png" width="49%" alt="Book contents (dark)" />
-</p>
-
-### Reading stats
-
-Everyone's totals and streaks, a per-reader detail page with a "when do you read"
-histogram you scroll day by day, and a per-chapter time breakdown.
-
-<p align="center">
-  <img src="docs/screenshots/stats-overview-light.png" width="40%" alt="Stats overview" />
-  <img src="docs/screenshots/stats-detail-light.png" width="40%" alt="Stats detail" />
-</p>
-
-### Account & storage
-
-Profile photo, the "share my activity" privacy toggle, and a storage panel showing exactly
-what's cached on-device with a one-tap clear.
-
-<p align="center">
-  <img src="docs/screenshots/account-light.png" width="49%" alt="Account (light)" />
-  <img src="docs/screenshots/account-dark.png" width="49%" alt="Account (dark)" />
-</p>
-
-### Changelog & login
-
-<p align="center">
-  <img src="docs/screenshots/changelog-light.png" width="49%" alt="Changelog" />
-  <img src="docs/screenshots/login-dark.png" width="49%" alt="Login (dark)" />
-</p>
-
-### Admin
-
-The owner's side: book management and reader management (share codes, spicy / cal-mode
-toggles, revoke).
-
-<p align="center">
-  <img src="docs/screenshots/admin-books-light.png" width="49%" alt="Admin — books" />
-  <img src="docs/screenshots/admin-people-light.png" width="49%" alt="Admin — people" />
-</p>
+<table>
+  <tr>
+    <td width="50%" align="center"><img src="docs/screenshots/admin-books-light.png" width="100%" alt="Admin — books" /><br/><sub>Books</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/admin-people-light.png" width="100%" alt="Admin — people" /><br/><sub>People</sub></td>
+  </tr>
+</table>
 
 ---
 
