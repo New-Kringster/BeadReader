@@ -167,20 +167,32 @@ export default function WebtoonReaderView({
     };
   }, [initialScrollFraction, saveProgress]);
 
+  // Persist scroll position + reading time before leaving the chapter.
+  const flushBeforeLeave = useCallback(() => {
+    const element = scrollRef.current;
+    if (element) {
+      const maximum = element.scrollHeight - element.clientHeight;
+      saveProgress(maximum > 0 ? element.scrollTop / maximum : 0, true);
+    }
+    flushTime(true);
+  }, [flushTime, saveProgress]);
+
   const goTo = useCallback(
     (id: string | null) => {
       if (!id) return;
-      const element = scrollRef.current;
-      if (element) {
-        const maximum = element.scrollHeight - element.clientHeight;
-        saveProgress(maximum > 0 ? element.scrollTop / maximum : 0, true);
-      }
-      flushTime(true);
+      flushBeforeLeave();
       setPendingId(id);
       startNav(() => router.push(chapterHref(id)));
     },
-    [chapterHref, flushTime, router, saveProgress]
+    [chapterHref, flushBeforeLeave, router]
   );
+
+  // Back to contents through the same transition so the loading bar shows (a
+  // plain <Link> bypasses it and makes back-navigation feel hung).
+  const goBack = useCallback(() => {
+    flushBeforeLeave();
+    startNav(() => router.push(bookHref));
+  }, [bookHref, flushBeforeLeave, router]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -196,7 +208,16 @@ export default function WebtoonReaderView({
     <div className="fixed inset-0 flex flex-col bg-black text-white">
       <NavProgress active={isNavigating} />
       <header className={`h-12 shrink-0 border-b border-white/20 bg-black flex items-center gap-3 px-4 text-sm transition-opacity ${chrome ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
-        <Link href={bookHref} className="hover:underline min-w-0 truncate">← {bookTitle}</Link>
+        <Link
+          href={bookHref}
+          className="hover:underline min-w-0 truncate"
+          onClick={(e) => {
+            e.preventDefault();
+            goBack();
+          }}
+        >
+          ← {bookTitle}
+        </Link>
         <span className="opacity-60 truncate hidden sm:inline">/ {chapter.title}</span>
         <button className="reader-icon ml-auto" onClick={() => setShowToc(true)} title="Contents">☰</button>
       </header>

@@ -432,22 +432,27 @@ export async function setUserRevoked(userId: string, revoked: boolean): Promise<
 }
 
 export async function setReaderExplicit(userId: string, hasAccess: boolean): Promise<void> {
-  await supabaseAdmin
+  const { error } = await supabaseAdmin
     .from("users")
     // Granting spicy access turns off cal mode — the two are mutually exclusive.
     .update({ has_explicit_access: hasAccess, ...(hasAccess ? { cal_mode: false } : {}) })
     .eq("id", userId)
     .eq("role", "reader");
+  // Surface DB failures instead of swallowing them — a missing `cal_mode` column
+  // (migration 0003 not applied) used to make this silently no-op, so the toggle
+  // looked dead in the UI. Throwing lets the caller show why.
+  if (error) throw new Error(`Could not update spicy access: ${error.message}`);
 }
 
 /** Toggle "cal mode" for a reader. Turning it on clears explicit access (the two
  *  are mutually exclusive): a cal-mode reader sees no spicy content at all. */
 export async function setReaderCalMode(userId: string, on: boolean): Promise<void> {
-  await supabaseAdmin
+  const { error } = await supabaseAdmin
     .from("users")
     .update({ cal_mode: on, ...(on ? { has_explicit_access: false } : {}) })
     .eq("id", userId)
     .eq("role", "reader");
+  if (error) throw new Error(`Could not update cal mode: ${error.message}`);
 }
 
 export async function deleteUser(userId: string): Promise<void> {

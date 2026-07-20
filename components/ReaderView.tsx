@@ -264,25 +264,37 @@ export default function ReaderView({
       : scrollPct;
 
   // ---- chapter navigation ----
+  // Persist position + reading time before we leave the chapter so nothing is lost.
+  const flushBeforeLeave = useCallback(() => {
+    const el = scrollRef.current;
+    if (settings.layout === "scroll" && el) {
+      const max = el.scrollHeight - el.clientHeight;
+      saveProgress(max > 0 ? el.scrollTop / max : 0, 1, true);
+    } else {
+      saveProgress(0, page, true);
+    }
+    flushTime(true);
+  }, [page, saveProgress, flushTime, settings.layout]);
+
   const goTo = useCallback(
     (id: string | null) => {
       if (!id) return;
-      // Flush before we leave so nothing is lost.
-      const el = scrollRef.current;
-      if (settings.layout === "scroll" && el) {
-        const max = el.scrollHeight - el.clientHeight;
-        saveProgress(max > 0 ? el.scrollTop / max : 0, 1, true);
-      } else {
-        saveProgress(0, page, true);
-      }
-      flushTime(true);
+      flushBeforeLeave();
       // Mark the target as pending and run the navigation inside a transition so
       // isNavigating drives the loading bar until the new chapter commits.
       setPendingId(id);
       startNav(() => router.push(`/read/${bookId}/${id}`));
     },
-    [bookId, page, router, saveProgress, flushTime, settings.layout]
+    [bookId, router, flushBeforeLeave]
   );
+
+  // Back to the book's contents. Routed through the same transition as chapter
+  // nav so the reader's loading bar shows — a plain <Link> here bypasses it (the
+  // global bar steps aside on reader pages), making back-navigation feel hung.
+  const goBack = useCallback(() => {
+    flushBeforeLeave();
+    startNav(() => router.push(`/read/${bookId}`));
+  }, [bookId, router, flushBeforeLeave]);
 
   const nextPage = useCallback(() => {
     setPage((p) => {
@@ -347,7 +359,15 @@ export default function ReaderView({
         }`}
         style={barStyle}
       >
-        <Link href={`/read/${bookId}`} className="hover:underline min-w-0 truncate shrink" title="Back to contents">
+        <Link
+          href={`/read/${bookId}`}
+          className="hover:underline min-w-0 truncate shrink"
+          title="Back to contents"
+          onClick={(e) => {
+            e.preventDefault();
+            goBack();
+          }}
+        >
           ← {bookTitle}
         </Link>
         <span className="opacity-60 truncate hidden sm:inline">/ {chapter.title}</span>
