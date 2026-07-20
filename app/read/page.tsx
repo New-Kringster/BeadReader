@@ -8,6 +8,8 @@ import {
 import { formatDuration } from "@/lib/format";
 import ReaderNav from "@/components/ReaderNav";
 import OnlineNowStrip from "@/components/OnlineNowStrip";
+import VersionFooter from "@/components/VersionFooter";
+import WhatsNewPopup from "@/components/WhatsNewPopup";
 import Logo from "@/components/Logo";
 
 export default async function LibraryPage() {
@@ -77,7 +79,10 @@ export default async function LibraryPage() {
             ))}
           </div>
         )}
+
+        <VersionFooter className="mt-10" />
       </main>
+      {user.role === "reader" && <WhatsNewPopup />}
     </>
   );
 }
