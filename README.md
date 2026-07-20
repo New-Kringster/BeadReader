@@ -107,24 +107,86 @@ adding books and readers. That's the entire setup.
 
 ## Screenshots
 
-**Presence in the reader** — a green dot means someone's online; a green ring + number
-means they're in the *same* book, on that chapter.
+A visual tour of the app — no deploy needed. Light and dark themes are shown side by side.
 
-![Reader presence](public/changelog/presence-reader.png)
+### Library
 
-**See who's online in the library**, and what they're reading.
+Your books, plus an "Online now" strip showing who else is reading and what they're on.
 
-![Online now in the library](public/changelog/online.png)
+<p align="center">
+  <img src="docs/screenshots/library-light.png" width="49%" alt="Library (light)" />
+  <img src="docs/screenshots/library-dark.png" width="49%" alt="Library (dark)" />
+</p>
 
-**Bump a friend or send a quick note** from the reader menu — the message pops up on their
-screen for a few seconds and then disappears; nothing is saved.
+### The reader
 
-![Bump & quick message](public/changelog/reader-menu.png)
+An immersive, distraction-free reader (adjustable colours, font size, scroll/paginated),
+a dark reading theme, and a vertical webtoon reader — each showing who's around at the top.
 
-**A shared reading-stats dashboard** — total time, streaks, time per chapter, and a
-"when do you read" chart you can scroll through day by day.
+<p align="center">
+  <img src="docs/screenshots/reader-paper.png" width="32%" alt="Text reader (paper)" />
+  <img src="docs/screenshots/reader-dark.png" width="32%" alt="Text reader (dark)" />
+  <img src="docs/screenshots/webtoon.png" width="32%" alt="Webtoon reader" />
+</p>
 
-![Reading stats](public/changelog/stats.png)
+### Reading together
+
+A green dot means someone's online; a green ring + number means they're in the *same*
+book, on that chapter. Tap the cluster to bump a friend or send a quick, disappearing note.
+
+<p align="center">
+  <img src="public/changelog/presence-reader.png" width="60%" alt="Presence in the reader" />
+</p>
+<p align="center">
+  <img src="public/changelog/reader-menu.png" width="46%" alt="Bump & quick message menu" />
+</p>
+
+### Book page
+
+Book contents with a "Who's reading" widget (live "reading now" dots + progress) and the
+chapter list with read tracking and 🌶 spicy markers.
+
+<p align="center">
+  <img src="docs/screenshots/contents-light.png" width="49%" alt="Book contents (light)" />
+  <img src="docs/screenshots/contents-dark.png" width="49%" alt="Book contents (dark)" />
+</p>
+
+### Reading stats
+
+Everyone's totals and streaks, a per-reader detail page with a "when do you read"
+histogram you scroll day by day, and a per-chapter time breakdown.
+
+<p align="center">
+  <img src="docs/screenshots/stats-overview-light.png" width="40%" alt="Stats overview" />
+  <img src="docs/screenshots/stats-detail-light.png" width="40%" alt="Stats detail" />
+</p>
+
+### Account & storage
+
+Profile photo, the "share my activity" privacy toggle, and a storage panel showing exactly
+what's cached on-device with a one-tap clear.
+
+<p align="center">
+  <img src="docs/screenshots/account-light.png" width="49%" alt="Account (light)" />
+  <img src="docs/screenshots/account-dark.png" width="49%" alt="Account (dark)" />
+</p>
+
+### Changelog & login
+
+<p align="center">
+  <img src="docs/screenshots/changelog-light.png" width="49%" alt="Changelog" />
+  <img src="docs/screenshots/login-dark.png" width="49%" alt="Login (dark)" />
+</p>
+
+### Admin
+
+The owner's side: book management and reader management (share codes, spicy / cal-mode
+toggles, revoke).
+
+<p align="center">
+  <img src="docs/screenshots/admin-books-light.png" width="49%" alt="Admin — books" />
+  <img src="docs/screenshots/admin-people-light.png" width="49%" alt="Admin — people" />
+</p>
 
 ---
 
