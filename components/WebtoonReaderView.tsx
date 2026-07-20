@@ -108,9 +108,21 @@ export default function WebtoonReaderView({
       const el = scrollRef.current;
       const max = el ? el.scrollHeight - el.clientHeight : 0;
       const scrollFraction = el && max > 0 ? Math.min(1, Math.max(0, el.scrollTop / max)) : 0;
+      const now = new Date();
+      const localDay = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
+        now.getDate()
+      ).padStart(2, "0")}`;
       postJSON(
         "/api/reading-time",
-        { bookId, seconds, chapterId: chapter.id, scrollFraction, active },
+        {
+          bookId,
+          seconds,
+          chapterId: chapter.id,
+          scrollFraction,
+          active,
+          hourOfDay: now.getHours(),
+          localDay,
+        },
         beacon
       );
     },

@@ -23,6 +23,7 @@ export default function ReaderNav({ backHref, backLabel }: { backHref?: string; 
         )}
         <div className="ml-auto flex items-center gap-2 sm:gap-3 text-sm shrink-0">
           <Link href="/read" className="hover:underline">Library</Link>
+          <Link href="/read/stats" className="hover:underline">Stats</Link>
           <Link href="/read/account" className="hover:underline">Account</Link>
           <ThemeToggle />
           <LogoutButton />

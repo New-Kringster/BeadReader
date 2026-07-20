@@ -548,6 +548,56 @@ export async function addReadingTime(
   });
 }
 
+/** Add active seconds to a single chapter's running total. */
+export async function addChapterReadingTime(
+  userId: string,
+  bookId: string,
+  chapterId: string,
+  seconds: number
+): Promise<void> {
+  const add = Math.max(0, Math.round(seconds));
+  if (add === 0) return;
+  const { data } = await supabaseAdmin
+    .from("chapter_reading_time")
+    .select("total_seconds")
+    .eq("user_id", userId)
+    .eq("chapter_id", chapterId)
+    .maybeSingle();
+  const total = (data?.total_seconds ?? 0) + add;
+  await supabaseAdmin.from("chapter_reading_time").upsert({
+    user_id: userId,
+    chapter_id: chapterId,
+    book_id: bookId,
+    total_seconds: total,
+    updated_at: new Date().toISOString(),
+  });
+}
+
+/** Add active seconds to the reader-local (day, hour) bucket. */
+export async function addHourlyReadingTime(
+  userId: string,
+  day: string, // YYYY-MM-DD (reader-local)
+  hourOfDay: number,
+  seconds: number
+): Promise<void> {
+  const add = Math.max(0, Math.round(seconds));
+  if (add === 0) return;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return;
+  const hour = Math.trunc(hourOfDay);
+  if (!Number.isFinite(hour) || hour < 0 || hour > 23) return;
+  const { data } = await supabaseAdmin
+    .from("reading_time_hourly")
+    .select("seconds")
+    .eq("user_id", userId)
+    .eq("day", day)
+    .eq("hour_of_day", hour)
+    .maybeSingle();
+  const total = (data?.seconds ?? 0) + add;
+  await supabaseAdmin
+    .from("reading_time_hourly")
+    .upsert({ user_id: userId, day, hour_of_day: hour, seconds: total });
+}
+
 // ============================================================
 // Per-chapter read tracking (which chapters a reader has opened)
 // ============================================================
@@ -950,6 +1000,356 @@ export async function resolveResumeChapter(
     progress?.chapter_id && chapters.find((c) => c.id === progress.chapter_id);
   const target = last || chapters[0];
   return { chapterId: target.id, title: target.title, resuming: Boolean(last) };
+}
+
+// ============================================================
+// Reading-stats dashboard
+// ============================================================
+
+export interface ReaderStatsSummary {
+  userId: string;
+  name: string;
+  avatarUrl: string | null;
+  totalSeconds: number;
+  booksStarted: number;
+  booksFinished: number;
+  currentStreak: number;
+  longestStreak: number;
+  activeDays: number;
+  lastReadAt: string | null;
+}
+
+export interface ChapterTime {
+  chapterId: string;
+  number: number;
+  title: string;
+  seconds: number;
+}
+
+export interface BookStats {
+  bookId: string;
+  title: string;
+  total: number;
+  readCount: number;
+  pct: number;
+  currentChapterNumber: number | null;
+  totalSeconds: number;
+  estRemainingSeconds: number | null;
+  chapters: ChapterTime[];
+}
+
+export interface DayHours {
+  day: string; // YYYY-MM-DD
+  total: number;
+  hours: number[]; // length 24
+}
+
+export interface ReaderStats {
+  summary: ReaderStatsSummary;
+  books: BookStats[];
+  hourlyByDay: DayHours[]; // newest day first
+  hourTotals: number[]; // length 24, across all days
+}
+
+export type ReaderStatsResult =
+  | { kind: "stats"; stats: ReaderStats }
+  | { kind: "private"; name: string; avatarUrl: string | null }
+  | { kind: "notfound" };
+
+function ymd(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate()
+  ).padStart(2, "0")}`;
+}
+
+/** Current + longest streak (in days) and total active days from a list of days. */
+function computeStreaks(days: string[]): {
+  current: number;
+  longest: number;
+  activeDays: number;
+} {
+  const set = new Set(days);
+  if (set.size === 0) return { current: 0, longest: 0, activeDays: 0 };
+  const sorted = Array.from(set).sort(); // lexicographic = chronological for YYYY-MM-DD
+  const DAY = 86_400_000;
+
+  let longest = 1;
+  let run = 1;
+  for (let i = 1; i < sorted.length; i++) {
+    const diff = Math.round(
+      (new Date(`${sorted[i]}T00:00:00`).getTime() -
+        new Date(`${sorted[i - 1]}T00:00:00`).getTime()) /
+        DAY
+    );
+    if (diff === 1) run++;
+    else run = 1;
+    if (run > longest) longest = run;
+  }
+
+  const today = new Date();
+  const todayStr = ymd(today);
+  const yestStr = ymd(new Date(today.getTime() - DAY));
+  let current = 0;
+  if (set.has(todayStr) || set.has(yestStr)) {
+    let cursor = set.has(todayStr) ? today : new Date(today.getTime() - DAY);
+    while (set.has(ymd(cursor))) {
+      current++;
+      cursor = new Date(cursor.getTime() - DAY);
+    }
+  }
+  return { current, longest, activeDays: set.size };
+}
+
+/**
+ * Per-reader summary rows for the stats overview. Only readers who share their
+ * activity are included (plus the viewer themselves). Sorted by time read.
+ */
+export async function getReadingStatsOverview(viewerId: string): Promise<ReaderStatsSummary[]> {
+  const [{ data: pub }, { data: users }, { data: settings }, { data: reads }, { data: times }, { data: progress }, { data: hours }] =
+    await Promise.all([
+      supabaseAdmin.from("chapters").select("id, book_id").eq("status", "published"),
+      supabaseAdmin.from("users").select("id, name").eq("revoked", false).eq("role", "reader"),
+      supabaseAdmin.from("reader_settings").select("user_id, share_activity"),
+      supabaseAdmin.from("chapter_reads").select("user_id, book_id, chapter_id"),
+      supabaseAdmin.from("reading_time").select("user_id, total_seconds, updated_at"),
+      supabaseAdmin.from("reading_progress").select("user_id, updated_at"),
+      supabaseAdmin.from("reading_time_hourly").select("user_id, day"),
+    ]);
+
+  const publishedByBook = new Map<string, Set<string>>();
+  for (const c of pub ?? []) {
+    const s = publishedByBook.get(c.book_id as string) ?? new Set<string>();
+    s.add(c.id as string);
+    publishedByBook.set(c.book_id as string, s);
+  }
+
+  const readerList = (users ?? []) as { id: string; name: string }[];
+  const avatars = await getAvatars(readerList.map((u) => u.id));
+  const shareById = new Map(
+    (settings ?? []).map((s) => [s.user_id as string, (s as { share_activity: boolean | null }).share_activity])
+  );
+
+  const readsByUser = new Map<string, Map<string, Set<string>>>();
+  for (const r of reads ?? []) {
+    const pubSet = publishedByBook.get(r.book_id as string);
+    if (!pubSet || !pubSet.has(r.chapter_id as string)) continue;
+    let m = readsByUser.get(r.user_id as string);
+    if (!m) {
+      m = new Map();
+      readsByUser.set(r.user_id as string, m);
+    }
+    let set = m.get(r.book_id as string);
+    if (!set) {
+      set = new Set();
+      m.set(r.book_id as string, set);
+    }
+    set.add(r.chapter_id as string);
+  }
+
+  const timeByUser = new Map<string, number>();
+  const lastByUser = new Map<string, string>();
+  const bump = (uid: string, at: string | null | undefined) => {
+    if (at && (!lastByUser.get(uid) || at > (lastByUser.get(uid) as string))) lastByUser.set(uid, at);
+  };
+  for (const t of times ?? []) {
+    timeByUser.set(
+      t.user_id as string,
+      (timeByUser.get(t.user_id as string) ?? 0) + ((t.total_seconds as number) ?? 0)
+    );
+    bump(t.user_id as string, t.updated_at as string);
+  }
+  for (const p of progress ?? []) bump(p.user_id as string, p.updated_at as string);
+
+  const daysByUser = new Map<string, string[]>();
+  for (const h of hours ?? []) {
+    const arr = daysByUser.get(h.user_id as string) ?? [];
+    arr.push(h.day as string);
+    daysByUser.set(h.user_id as string, arr);
+  }
+
+  const rows: ReaderStatsSummary[] = [];
+  for (const u of readerList) {
+    const isSelf = u.id === viewerId;
+    if (!isSelf && shareById.get(u.id) === false) continue; // opted out — hidden from others
+    const booksMap = readsByUser.get(u.id) ?? new Map<string, Set<string>>();
+    let booksFinished = 0;
+    for (const [bId, set] of booksMap) {
+      const pubCount = publishedByBook.get(bId)?.size ?? 0;
+      if (pubCount > 0 && set.size >= pubCount) booksFinished++;
+    }
+    const streaks = computeStreaks(daysByUser.get(u.id) ?? []);
+    rows.push({
+      userId: u.id,
+      name: u.name,
+      avatarUrl: avatars.get(u.id) ?? null,
+      totalSeconds: timeByUser.get(u.id) ?? 0,
+      booksStarted: booksMap.size,
+      booksFinished,
+      currentStreak: streaks.current,
+      longestStreak: streaks.longest,
+      activeDays: streaks.activeDays,
+      lastReadAt: lastByUser.get(u.id) ?? null,
+    });
+  }
+  rows.sort((a, b) => b.totalSeconds - a.totalSeconds || a.name.localeCompare(b.name));
+  return rows;
+}
+
+/** Full stats for one reader's detail page (respects the share-activity opt-out). */
+export async function getReaderStats(viewerId: string, targetId: string): Promise<ReaderStatsResult> {
+  const { data: target } = await supabaseAdmin
+    .from("users")
+    .select("id, name, role, revoked")
+    .eq("id", targetId)
+    .maybeSingle();
+  if (!target || target.revoked || target.role !== "reader") return { kind: "notfound" };
+
+  const avatarUrl = await getAvatar(targetId);
+
+  if (targetId !== viewerId) {
+    const { data: setting } = await supabaseAdmin
+      .from("reader_settings")
+      .select("share_activity")
+      .eq("user_id", targetId)
+      .maybeSingle();
+    if (setting && setting.share_activity === false) {
+      return { kind: "private", name: target.name as string, avatarUrl };
+    }
+  }
+
+  const [{ data: pub }, { data: reads }, { data: times }, { data: progress }, { data: chTimes }, { data: hours }] =
+    await Promise.all([
+      supabaseAdmin
+        .from("chapters")
+        .select("id, book_id, title, position")
+        .eq("status", "published")
+        .order("position", { ascending: true }),
+      supabaseAdmin.from("chapter_reads").select("book_id, chapter_id").eq("user_id", targetId),
+      supabaseAdmin.from("reading_time").select("book_id, total_seconds, updated_at").eq("user_id", targetId),
+      supabaseAdmin.from("reading_progress").select("book_id, chapter_id, updated_at").eq("user_id", targetId),
+      supabaseAdmin.from("chapter_reading_time").select("book_id, chapter_id, total_seconds").eq("user_id", targetId),
+      supabaseAdmin.from("reading_time_hourly").select("day, hour_of_day, seconds").eq("user_id", targetId),
+    ]);
+
+  // Published chapters grouped/ordered per book.
+  const chaptersByBook = new Map<string, { id: string; title: string }[]>();
+  for (const c of pub ?? []) {
+    const arr = chaptersByBook.get(c.book_id as string) ?? [];
+    arr.push({ id: c.id as string, title: c.title as string });
+    chaptersByBook.set(c.book_id as string, arr);
+  }
+  const numberById = new Map<string, number>();
+  const bookIdByChapter = new Map<string, string>();
+  for (const [bId, list] of chaptersByBook) {
+    list.forEach((c, i) => {
+      numberById.set(c.id, i + 1);
+      bookIdByChapter.set(c.id, bId);
+    });
+  }
+
+  const readsByBook = new Map<string, Set<string>>();
+  for (const r of reads ?? []) {
+    if (!numberById.has(r.chapter_id as string)) continue;
+    const set = readsByBook.get(r.book_id as string) ?? new Set<string>();
+    set.add(r.chapter_id as string);
+    readsByBook.set(r.book_id as string, set);
+  }
+  const timeByBook = new Map<string, number>();
+  let lastReadAt: string | null = null;
+  for (const t of times ?? []) {
+    timeByBook.set(t.book_id as string, (t.total_seconds as number) ?? 0);
+    if (t.updated_at && (!lastReadAt || (t.updated_at as string) > lastReadAt)) lastReadAt = t.updated_at as string;
+  }
+  const progByBook = new Map<string, string | null>();
+  for (const p of progress ?? []) {
+    progByBook.set(p.book_id as string, (p.chapter_id as string) ?? null);
+    if (p.updated_at && (!lastReadAt || (p.updated_at as string) > lastReadAt)) lastReadAt = p.updated_at as string;
+  }
+  const chapterSeconds = new Map<string, number>();
+  for (const ct of chTimes ?? []) chapterSeconds.set(ct.chapter_id as string, (ct.total_seconds as number) ?? 0);
+
+  // Book titles for started books.
+  const startedBookIds = Array.from(
+    new Set([...readsByBook.keys(), ...progByBook.keys()].filter((b) => chaptersByBook.has(b)))
+  );
+  const titleById = new Map<string, string>();
+  if (startedBookIds.length) {
+    const { data: books } = await supabaseAdmin.from("books").select("id, title").in("id", startedBookIds);
+    for (const b of books ?? []) titleById.set(b.id as string, b.title as string);
+  }
+
+  const books: BookStats[] = [];
+  let booksFinished = 0;
+  let totalSeconds = 0;
+  for (const bId of startedBookIds) {
+    const list = chaptersByBook.get(bId) ?? [];
+    const total = list.length;
+    const readSet = readsByBook.get(bId) ?? new Set<string>();
+    const readCount = readSet.size;
+    const pct = total > 0 ? Math.min(100, Math.round((readCount / total) * 100)) : 0;
+    const bookSeconds = timeByBook.get(bId) ?? 0;
+    totalSeconds += bookSeconds;
+    if (total > 0 && readCount >= total) booksFinished++;
+
+    const curId = progByBook.get(bId) ?? null;
+    const chapters: ChapterTime[] = list
+      .map((c) => ({
+        chapterId: c.id,
+        number: numberById.get(c.id) ?? 0,
+        title: c.title,
+        seconds: chapterSeconds.get(c.id) ?? 0,
+      }))
+      .filter((c) => c.seconds > 0);
+
+    const avgPerRead = readCount > 0 ? bookSeconds / readCount : 0;
+    const remaining = total - readCount;
+    books.push({
+      bookId: bId,
+      title: titleById.get(bId) ?? "Untitled",
+      total,
+      readCount,
+      pct,
+      currentChapterNumber: curId ? numberById.get(curId) ?? null : null,
+      totalSeconds: bookSeconds,
+      estRemainingSeconds: avgPerRead > 0 && remaining > 0 ? Math.round(avgPerRead * remaining) : null,
+      chapters,
+    });
+  }
+  books.sort((a, b) => b.totalSeconds - a.totalSeconds);
+
+  // Hourly grouped by day.
+  const byDay = new Map<string, number[]>();
+  const hourTotals = new Array(24).fill(0);
+  for (const h of hours ?? []) {
+    const day = h.day as string;
+    const hour = h.hour_of_day as number;
+    const secs = (h.seconds as number) ?? 0;
+    const arr = byDay.get(day) ?? new Array(24).fill(0);
+    arr[hour] = (arr[hour] ?? 0) + secs;
+    byDay.set(day, arr);
+    hourTotals[hour] += secs;
+  }
+  const hourlyByDay: DayHours[] = Array.from(byDay.entries())
+    .map(([day, hrs]) => ({ day, hours: hrs, total: hrs.reduce((s, v) => s + v, 0) }))
+    .sort((a, b) => (a.day < b.day ? 1 : -1)); // newest first
+
+  const allDays = Array.from(byDay.keys());
+  const streaks = computeStreaks(allDays);
+
+  const summary: ReaderStatsSummary = {
+    userId: targetId,
+    name: target.name as string,
+    avatarUrl,
+    totalSeconds,
+    booksStarted: startedBookIds.length,
+    booksFinished,
+    currentStreak: streaks.current,
+    longestStreak: streaks.longest,
+    activeDays: streaks.activeDays,
+    lastReadAt,
+  };
+
+  return { kind: "stats", stats: { summary, books, hourlyByDay, hourTotals } };
 }
 
 // ============================================================
