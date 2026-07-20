@@ -8,6 +8,7 @@ import ChangeCodeCard from "@/components/ChangeCodeCard";
 import ShareActivityToggle from "@/components/ShareActivityToggle";
 import AvatarUpload from "@/components/AvatarUpload";
 import ClearCacheButton from "@/components/ClearCacheButton";
+import StorageDetails from "@/components/StorageDetails";
 
 export default async function AccountPage() {
   const user = (await getCurrentUser())!;
@@ -72,13 +73,14 @@ export default async function AccountPage() {
         <div className="card p-6 max-w-md">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <div className="font-medium">On-device cache</div>
+              <div className="font-medium">On-device data</div>
               <p className="mt-0.5 text-xs text-muted">
                 Covers and artwork are stored on your device so pages load faster and use less data.
               </p>
             </div>
             <ClearCacheButton />
           </div>
+          <StorageDetails />
         </div>
 
         <p className="text-sm text-muted mt-6">

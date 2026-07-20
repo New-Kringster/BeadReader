@@ -2,33 +2,47 @@
 import { useState } from "react";
 
 /**
- * Clears the on-device asset cache (book covers, artwork, static files) and
- * reloads with fresh copies. Handy if something looks out of date or you want to
- * free up space.
+ * Wipes ALL data this app has saved on the device — the cached covers/artwork,
+ * plus browser-stored preferences (theme, and the "what's new" seen state) — then
+ * reloads fresh. Books, progress and settings live on the server and are untouched.
  */
 export default function ClearCacheButton() {
   const [busy, setBusy] = useState(false);
 
   const clear = async () => {
+    if (
+      !window.confirm(
+        "Clear all saved data on this device? This removes cached covers and artwork, your theme choice, and resets the “what's new” popup. Your books, reading progress and settings are safe — they're stored on the server."
+      )
+    ) {
+      return;
+    }
     setBusy(true);
     try {
-      // Ask the service worker to purge its runtime cache…
       navigator.serviceWorker?.controller?.postMessage("clear-cache");
-      // …and clear directly too, in case the SW isn't controlling this page yet.
       if ("caches" in window) {
         const keys = await caches.keys();
         await Promise.all(keys.map((k) => caches.delete(k)));
       }
     } catch {
-      /* ignore — we reload regardless */
+      /* ignore — still clear storage + reload */
     }
-    // Reload to refetch everything fresh.
+    try {
+      localStorage.clear();
+    } catch {
+      /* ignore */
+    }
+    try {
+      sessionStorage.clear();
+    } catch {
+      /* ignore */
+    }
     window.location.reload();
   };
 
   return (
     <button type="button" className="btn btn-sm" disabled={busy} onClick={clear}>
-      {busy ? "Clearing…" : "Clear cached data"}
+      {busy ? "Clearing…" : "Clear all saved data"}
     </button>
   );
 }
