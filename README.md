@@ -1,4 +1,6 @@
-# 📖 BeadReader
+# <img src="public/logo.png" alt="BeadReader logo" width="32" height="32" align="top" /> BeadReader
+
+**Official page: [www.chiambucket.com/beadreader](https://www.chiambucket.com/beadreader)**
 
 A small, private online book reader. An **admin** publishes text books in Markdown
 or optional image-based webtoons; **readers** log in with a single access code and read —
