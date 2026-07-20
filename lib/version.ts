@@ -1,7 +1,7 @@
 // The human-facing app version. Shown on the login and library pages, and used
 // to anchor the changelog and the "what's new" popup. Bump this (and add a
 // matching CHANGELOG entry) whenever there are user-facing changes to announce.
-export const APP_VERSION = "1.2.0";
+export const APP_VERSION = "1.1.0";
 
 // A per-deployment build id, baked in at build time from Vercel's environment
 // (see next.config.ts). The running client compares its baked-in copy against

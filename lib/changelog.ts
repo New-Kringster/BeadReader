@@ -26,34 +26,10 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    version: "1.2.0",
-    date: "2026-07-20",
-    title: "Your reading, visualized — and faster",
-    intro: "A stats dashboard for everyone, plus quicker page loads.",
-    items: [
-      {
-        title: "Reading stats dashboard",
-        body: "See how everyone's reading is going. Each reader has a page with their total time, books started and finished, current streak, a “when do you read” chart you can scroll through day by day, and a per-book breakdown showing how long each chapter took.",
-        how: "Open Stats from the top menu, then tap any reader.",
-        image: "/changelog/stats.png",
-      },
-      {
-        title: "Faster loading, less data used",
-        body: "Book covers, artwork and app files are now kept on your device after the first load, so pages open faster and use less data on repeat visits. The reader also gets the next chapter ready in advance, so moving on is instant.",
-      },
-      {
-        title: "Clear cached data",
-        body: "If something ever looks out of date or you want to free up space, you can wipe the on-device cache and reload everything fresh.",
-        how: "Go to Account → Storage → Clear cached data.",
-        image: "/changelog/cache.png",
-      },
-    ],
-  },
-  {
     version: "1.1.0",
     date: "2026-07-20",
-    title: "Reading together",
-    intro: "See who else is reading, react in the moment, and give yourself a face.",
+    title: "Reading together — with stats and speed",
+    intro: "A big update: see who else is reading and react in the moment, give yourself a profile photo, track everyone's reading in a new stats dashboard, and enjoy faster loading.",
     items: [
       {
         title: "See who's online",
@@ -84,6 +60,22 @@ export const CHANGELOG: ChangelogEntry[] = [
         body: "Prefer to read privately? You can turn off sharing so others can't see when you're online or what you're reading. You'll still see everyone else.",
         how: "Go to Account and turn off “Share my reading activity”.",
         image: "/changelog/privacy.png",
+      },
+      {
+        title: "Reading stats dashboard",
+        body: "See how everyone's reading is going. Each reader has a page with their total time, books started and finished, current streak, a “when do you read” chart you can scroll through day by day, and a per-book breakdown showing how long each chapter took.",
+        how: "Open Stats from the top menu, then tap any reader.",
+        image: "/changelog/stats.png",
+      },
+      {
+        title: "Faster loading, less data used",
+        body: "Book covers, artwork and app files are now kept on your device after the first load, so pages open faster and use less data on repeat visits. The reader also gets the next chapter ready in advance, so moving on is instant.",
+      },
+      {
+        title: "Clear cached data",
+        body: "If something ever looks out of date or you want to free up space, you can wipe the on-device cache and reload everything fresh.",
+        how: "Go to Account → Storage → Clear cached data.",
+        image: "/changelog/cache.png",
       },
     ],
   },

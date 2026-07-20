@@ -82,7 +82,7 @@ export default async function LibraryPage() {
 
         <VersionFooter className="mt-10" />
       </main>
-      {user.role === "reader" && <WhatsNewPopup />}
+      <WhatsNewPopup />
     </>
   );
 }
