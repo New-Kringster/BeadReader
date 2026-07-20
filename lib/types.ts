@@ -60,7 +60,44 @@ export interface ReaderSettings {
   text_color: string;
   font_size: number;
   layout: Layout;
+  /** Opt-in (default true) to the social presence/stats layer — see others and
+   *  be seen. When false, this reader is hidden from presence and stats. */
+  share_activity: boolean;
   updated_at: string;
+}
+
+/** A reader's live location, upserted on the reading-time flush. */
+export interface ReaderPresence {
+  user_id: string;
+  book_id: string | null;
+  chapter_id: string | null;
+  scroll_fraction: number;
+  is_active: boolean;
+  last_beat_at: string;
+}
+
+/** A reader who is online right now, resolved for display. Client-safe. */
+export interface PresenceEntry {
+  userId: string;
+  name: string;
+  /** Compressed data-URI avatar, or null when the reader hasn't set one. */
+  avatarUrl: string | null;
+  bookId: string | null;
+  bookTitle: string | null;
+  /** 1-based chapter number in book order, or null if unknown/browsing. */
+  chapterNumber: number | null;
+  /** True when this reader is in the same book as the viewer. */
+  sameBook: boolean;
+}
+
+export type NudgeKind = "bump" | "text";
+
+/** A nudge delivered to the viewer, for the ephemeral toast. Client-safe. */
+export interface IncomingNudge {
+  id: string;
+  fromName: string;
+  kind: NudgeKind;
+  body: string | null;
 }
 
 export interface ReadingProgress {
@@ -77,4 +114,5 @@ export const DEFAULT_SETTINGS: Omit<ReaderSettings, "user_id" | "updated_at"> = 
   text_color: "#1a1a1a",
   font_size: 19,
   layout: "scroll",
+  share_activity: true,
 };

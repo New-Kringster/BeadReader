@@ -1,17 +1,23 @@
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getSettings, getAvatar } from "@/lib/data";
 import { formatDuration } from "@/lib/format";
 import ReaderNav from "@/components/ReaderNav";
 import ChangeCodeCard from "@/components/ChangeCodeCard";
+import ShareActivityToggle from "@/components/ShareActivityToggle";
+import AvatarUpload from "@/components/AvatarUpload";
+import ClearCacheButton from "@/components/ClearCacheButton";
+import StorageDetails from "@/components/StorageDetails";
 
 export default async function AccountPage() {
   const user = (await getCurrentUser())!;
 
-  const { data: times } = await supabaseAdmin
-    .from("reading_time")
-    .select("total_seconds")
-    .eq("user_id", user.id);
+  const [{ data: times }, settings, avatar] = await Promise.all([
+    supabaseAdmin.from("reading_time").select("total_seconds").eq("user_id", user.id),
+    getSettings(user.id),
+    getAvatar(user.id),
+  ]);
   const totalSeconds = (times ?? []).reduce((s, t) => s + (t.total_seconds ?? 0), 0);
 
   return (
@@ -23,6 +29,8 @@ export default async function AccountPage() {
         </h1>
 
         <div className="card p-6 space-y-4 max-w-md">
+          <AvatarUpload name={user.name} initialAvatar={avatar} />
+
           <div>
             <div className="label">Name</div>
             <div className="font-medium">{user.name}</div>
@@ -52,8 +60,28 @@ export default async function AccountPage() {
           </div>
         </div>
 
+        {user.role === "reader" && (
+          <div className="card p-6 mt-6 max-w-md">
+            <ShareActivityToggle initial={settings.share_activity ?? true} />
+          </div>
+        )}
+
         <h2 className="text-lg font-semibold mt-8 mb-3">Access code</h2>
         <ChangeCodeCard currentCode={user.access_code} />
+
+        <h2 className="text-lg font-semibold mt-8 mb-3">Storage</h2>
+        <div className="card p-6 max-w-md">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="font-medium">On-device data</div>
+              <p className="mt-0.5 text-xs text-muted">
+                Covers and artwork are stored on your device so pages load faster and use less data.
+              </p>
+            </div>
+            <ClearCacheButton />
+          </div>
+          <StorageDetails />
+        </div>
 
         <p className="text-sm text-muted mt-6">
           Reading colors, font size, and scroll/page layout are adjustable from the{" "}

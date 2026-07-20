@@ -1,4 +1,6 @@
+"use client";
 import type { ReaderBookProgress } from "@/lib/data";
+import { usePresence } from "@/components/PresenceProvider";
 
 /** "2h 15m", "43m", "<1m" — total time spent reading. */
 function formatDuration(secs: number): string {
@@ -20,6 +22,11 @@ export default function BookReadersProgress({
   readers: ReaderBookProgress[];
   currentUserId: string;
 }) {
+  // Live presence for this book (the provider knows the book from the route):
+  // readers online here right now get a green dot.
+  const online = usePresence();
+  const onlineHere = new Set(online.filter((r) => r.sameBook).map((r) => r.userId));
+
   if (readers.length === 0) return null;
 
   return (
@@ -30,18 +37,31 @@ export default function BookReadersProgress({
       <ul className="card divide-y divide-line">
         {readers.map((r) => {
           const isYou = r.userId === currentUserId;
+          const isOnline = onlineHere.has(r.userId);
           return (
             <li key={r.userId} className="flex items-center gap-3 px-4 py-3">
-              <span
-                aria-hidden
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent/15 text-sm font-semibold text-accent"
-              >
-                {initial(r.name)}
+              <span aria-hidden className="relative inline-block h-8 w-8 shrink-0">
+                <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-accent/15 text-sm font-semibold text-accent">
+                  {r.avatarUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={r.avatarUrl} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    initial(r.name)
+                  )}
+                </span>
+                {isOnline && (
+                  <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-panel" />
+                )}
               </span>
 
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="min-w-0 truncate text-sm font-medium">{r.name}</span>
+                  {isOnline && (
+                    <span className="shrink-0 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                      reading now
+                    </span>
+                  )}
                   {isYou && (
                     <span className="shrink-0 rounded bg-accent/15 px-1.5 py-0.5 text-xs text-accent">
                       you

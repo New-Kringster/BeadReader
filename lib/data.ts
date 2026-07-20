@@ -7,6 +7,9 @@ import {
   type Book,
   type Chapter,
   type ChapterImage,
+  type IncomingNudge,
+  type NudgeKind,
+  type PresenceEntry,
   type ReaderSettings,
   type ReadingProgress,
   type Role,
@@ -432,22 +435,27 @@ export async function setUserRevoked(userId: string, revoked: boolean): Promise<
 }
 
 export async function setReaderExplicit(userId: string, hasAccess: boolean): Promise<void> {
-  await supabaseAdmin
+  const { error } = await supabaseAdmin
     .from("users")
     // Granting spicy access turns off cal mode — the two are mutually exclusive.
     .update({ has_explicit_access: hasAccess, ...(hasAccess ? { cal_mode: false } : {}) })
     .eq("id", userId)
     .eq("role", "reader");
+  // Surface DB failures instead of swallowing them — a missing `cal_mode` column
+  // (migration 0003 not applied) used to make this silently no-op, so the toggle
+  // looked dead in the UI. Throwing lets the caller show why.
+  if (error) throw new Error(`Could not update spicy access: ${error.message}`);
 }
 
 /** Toggle "cal mode" for a reader. Turning it on clears explicit access (the two
  *  are mutually exclusive): a cal-mode reader sees no spicy content at all. */
 export async function setReaderCalMode(userId: string, on: boolean): Promise<void> {
-  await supabaseAdmin
+  const { error } = await supabaseAdmin
     .from("users")
     .update({ cal_mode: on, ...(on ? { has_explicit_access: false } : {}) })
     .eq("id", userId)
     .eq("role", "reader");
+  if (error) throw new Error(`Could not update cal mode: ${error.message}`);
 }
 
 export async function deleteUser(userId: string): Promise<void> {
@@ -540,6 +548,56 @@ export async function addReadingTime(
   });
 }
 
+/** Add active seconds to a single chapter's running total. */
+export async function addChapterReadingTime(
+  userId: string,
+  bookId: string,
+  chapterId: string,
+  seconds: number
+): Promise<void> {
+  const add = Math.max(0, Math.round(seconds));
+  if (add === 0) return;
+  const { data } = await supabaseAdmin
+    .from("chapter_reading_time")
+    .select("total_seconds")
+    .eq("user_id", userId)
+    .eq("chapter_id", chapterId)
+    .maybeSingle();
+  const total = (data?.total_seconds ?? 0) + add;
+  await supabaseAdmin.from("chapter_reading_time").upsert({
+    user_id: userId,
+    chapter_id: chapterId,
+    book_id: bookId,
+    total_seconds: total,
+    updated_at: new Date().toISOString(),
+  });
+}
+
+/** Add active seconds to the reader-local (day, hour) bucket. */
+export async function addHourlyReadingTime(
+  userId: string,
+  day: string, // YYYY-MM-DD (reader-local)
+  hourOfDay: number,
+  seconds: number
+): Promise<void> {
+  const add = Math.max(0, Math.round(seconds));
+  if (add === 0) return;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return;
+  const hour = Math.trunc(hourOfDay);
+  if (!Number.isFinite(hour) || hour < 0 || hour > 23) return;
+  const { data } = await supabaseAdmin
+    .from("reading_time_hourly")
+    .select("seconds")
+    .eq("user_id", userId)
+    .eq("day", day)
+    .eq("hour_of_day", hour)
+    .maybeSingle();
+  const total = (data?.seconds ?? 0) + add;
+  await supabaseAdmin
+    .from("reading_time_hourly")
+    .upsert({ user_id: userId, day, hour_of_day: hour, seconds: total });
+}
+
 // ============================================================
 // Per-chapter read tracking (which chapters a reader has opened)
 // ============================================================
@@ -571,6 +629,7 @@ export async function listReadChapterIds(userId: string, bookId: string): Promis
 export interface ReaderBookProgress {
   userId: string;
   name: string;
+  avatarUrl: string | null;
   readCount: number;
   total: number;
   pct: number;
@@ -626,6 +685,8 @@ export async function getBookReadersProgress(
     (times ?? []).map((t) => [t.user_id as string, (t.total_seconds as number) ?? 0])
   );
 
+  const avatars = await getAvatars(((users ?? []) as { id: string }[]).map((u) => u.id));
+
   const rows: ReaderBookProgress[] = [];
   for (const u of (users ?? []) as { id: string; name: string }[]) {
     const readCount = readsByUser.get(u.id)?.size ?? 0;
@@ -636,6 +697,7 @@ export async function getBookReadersProgress(
     rows.push({
       userId: u.id,
       name: u.name,
+      avatarUrl: avatars.get(u.id) ?? null,
       readCount,
       total,
       pct: Math.min(100, Math.round((readCount / total) * 100)),
@@ -646,6 +708,259 @@ export async function getBookReadersProgress(
 
   rows.sort((a, b) => b.pct - a.pct || b.totalSeconds - a.totalSeconds);
   return rows;
+}
+
+// ============================================================
+// Avatars (compressed profile photos, stored as data URIs)
+// ============================================================
+
+/** Data-URI avatars for a set of users, keyed by user id (missing = no avatar). */
+export async function getAvatars(userIds: string[]): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  if (userIds.length === 0) return map;
+  const { data } = await supabaseAdmin
+    .from("user_avatars")
+    .select("user_id, data_uri")
+    .in("user_id", userIds);
+  for (const row of data ?? []) map.set(row.user_id as string, row.data_uri as string);
+  return map;
+}
+
+export async function getAvatar(userId: string): Promise<string | null> {
+  const { data } = await supabaseAdmin
+    .from("user_avatars")
+    .select("data_uri")
+    .eq("user_id", userId)
+    .maybeSingle();
+  return (data?.data_uri as string) ?? null;
+}
+
+export async function setAvatar(userId: string, dataUri: string): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from("user_avatars")
+    .upsert({ user_id: userId, data_uri: dataUri, updated_at: new Date().toISOString() });
+  if (error) throw new Error(`Could not save avatar: ${error.message}`);
+}
+
+export async function deleteAvatar(userId: string): Promise<void> {
+  await supabaseAdmin.from("user_avatars").delete().eq("user_id", userId);
+}
+
+// ============================================================
+// Presence (who's reading right now)
+// ============================================================
+
+/** A presence beat is "online" if it landed within this window and was active. */
+const PRESENCE_ONLINE_MS = 45_000;
+
+/** 1-based position of each published chapter within a book, in reading order. */
+async function chapterNumberMap(bookId: string): Promise<Map<string, number>> {
+  const { data } = await supabaseAdmin
+    .from("chapters")
+    .select("id")
+    .eq("book_id", bookId)
+    .eq("status", "published")
+    .order("position", { ascending: true });
+  const map = new Map<string, number>();
+  (data ?? []).forEach((c, i) => map.set(c.id as string, i + 1));
+  return map;
+}
+
+/**
+ * Upsert a reader's live location. Called on the reading-time flush, so presence
+ * rides the existing ~15s cadence rather than a separate heartbeat. Best-effort:
+ * a failure here (e.g. table missing before the migration runs) must never break
+ * reading-time tracking, so we log and move on rather than throw.
+ */
+export async function upsertPresence(input: {
+  userId: string;
+  bookId: string | null;
+  chapterId: string | null;
+  scrollFraction: number;
+  active: boolean;
+}): Promise<void> {
+  const frac = Math.min(1, Math.max(0, Number(input.scrollFraction) || 0));
+  const { error } = await supabaseAdmin.from("reader_presence").upsert({
+    user_id: input.userId,
+    book_id: input.bookId,
+    chapter_id: input.chapterId,
+    scroll_fraction: frac,
+    is_active: input.active,
+    last_beat_at: new Date().toISOString(),
+  });
+  if (error) console.error("upsertPresence failed:", error.message);
+}
+
+/**
+ * Readers who are actively reading right now — a fresh, active presence beat —
+ * excluding the viewer, admins, revoked accounts, and anyone who has opted out
+ * of sharing activity. When `viewerBookId` is given, `sameBook` flags readers in
+ * that same book (so the reader UI can ring them and show their chapter number).
+ * Same-book readers sort first, then alphabetically.
+ */
+export async function getOnlinePresence(
+  viewerId: string,
+  viewerBookId?: string | null
+): Promise<PresenceEntry[]> {
+  const cutoff = new Date(Date.now() - PRESENCE_ONLINE_MS).toISOString();
+  const { data: rows } = await supabaseAdmin
+    .from("reader_presence")
+    .select("user_id, book_id, chapter_id, is_active, last_beat_at")
+    .eq("is_active", true)
+    .gte("last_beat_at", cutoff);
+
+  const others = ((rows ?? []) as {
+    user_id: string;
+    book_id: string | null;
+    chapter_id: string | null;
+  }[]).filter((p) => p.user_id !== viewerId);
+  if (others.length === 0) return [];
+
+  const ids = others.map((p) => p.user_id);
+  const [{ data: users }, { data: settings }, avatars] = await Promise.all([
+    supabaseAdmin.from("users").select("id, name, role, revoked").in("id", ids),
+    supabaseAdmin.from("reader_settings").select("user_id, share_activity").in("user_id", ids),
+    getAvatars(ids),
+  ]);
+  const userById = new Map(
+    (users ?? []).map((u) => [
+      u.id as string,
+      u as { id: string; name: string; role: Role; revoked: boolean },
+    ])
+  );
+  const shareById = new Map(
+    (settings ?? []).map((s) => [
+      s.user_id as string,
+      (s as { share_activity: boolean | null }).share_activity,
+    ])
+  );
+
+  // Resolve book titles and per-book chapter numbering, once per distinct book.
+  const bookIds = Array.from(
+    new Set(others.map((p) => p.book_id).filter((b): b is string => !!b))
+  );
+  const titleById = new Map<string, string>();
+  const numberMaps = new Map<string, Map<string, number>>();
+  if (bookIds.length) {
+    const { data: books } = await supabaseAdmin
+      .from("books")
+      .select("id, title")
+      .in("id", bookIds);
+    (books ?? []).forEach((b) => titleById.set(b.id as string, b.title as string));
+    await Promise.all(
+      bookIds.map(async (bid) => numberMaps.set(bid, await chapterNumberMap(bid)))
+    );
+  }
+
+  const out: PresenceEntry[] = [];
+  for (const p of others) {
+    const u = userById.get(p.user_id);
+    if (!u || u.revoked || u.role !== "reader") continue; // readers only
+    if (shareById.get(p.user_id) === false) continue; // opted out
+    const chapterNumber =
+      p.book_id && p.chapter_id ? numberMaps.get(p.book_id)?.get(p.chapter_id) ?? null : null;
+    out.push({
+      userId: p.user_id,
+      name: u.name,
+      avatarUrl: avatars.get(p.user_id) ?? null,
+      bookId: p.book_id,
+      bookTitle: p.book_id ? titleById.get(p.book_id) ?? null : null,
+      chapterNumber,
+      sameBook: !!viewerBookId && p.book_id === viewerBookId,
+    });
+  }
+  out.sort((a, b) => Number(b.sameBook) - Number(a.sameBook) || a.name.localeCompare(b.name));
+  return out;
+}
+
+// ============================================================
+// Nudges (ephemeral bump / quick-text)
+// ============================================================
+
+const NUDGE_MAX_BODY = 140;
+const NUDGE_MIN_INTERVAL_MS = 3_000; // per sender→recipient, anti-spam
+const NUDGE_TTL_MS = 120_000; // undelivered nudges expire after this
+
+/** Send a bump or short text to another reader. Nothing is stored long-term. */
+export async function sendNudge(
+  fromUserId: string,
+  toUserId: string,
+  kind: NudgeKind,
+  body: string | null
+): Promise<{ ok: boolean; error?: string }> {
+  if (fromUserId === toUserId) return { ok: false, error: "You can't nudge yourself." };
+  const text = kind === "text" ? (body ?? "").replace(/\s+/g, " ").trim().slice(0, NUDGE_MAX_BODY) : null;
+  if (kind === "text" && !text) return { ok: false, error: "Say something first." };
+
+  // Recipient must be a real, non-revoked reader who shares activity.
+  const [{ data: recipient }, { data: setting }] = await Promise.all([
+    supabaseAdmin.from("users").select("role, revoked").eq("id", toUserId).maybeSingle(),
+    supabaseAdmin.from("reader_settings").select("share_activity").eq("user_id", toUserId).maybeSingle(),
+  ]);
+  if (!recipient || recipient.revoked || recipient.role !== "reader") {
+    return { ok: false, error: "That reader isn't available." };
+  }
+  if (setting && setting.share_activity === false) {
+    return { ok: false, error: "That reader isn't available." };
+  }
+
+  // Rate limit: one nudge per few seconds per sender→recipient.
+  const since = new Date(Date.now() - NUDGE_MIN_INTERVAL_MS).toISOString();
+  const { count } = await supabaseAdmin
+    .from("reader_nudges")
+    .select("id", { count: "exact", head: true })
+    .eq("from_user_id", fromUserId)
+    .eq("to_user_id", toUserId)
+    .gte("created_at", since);
+  if ((count ?? 0) > 0) return { ok: false, error: "Slow down a moment." };
+
+  const { error } = await supabaseAdmin
+    .from("reader_nudges")
+    .insert({ from_user_id: fromUserId, to_user_id: toUserId, kind, body: text });
+  if (error) return { ok: false, error: "Could not send." };
+  return { ok: true };
+}
+
+/**
+ * Return the pending nudges for a reader and delete them in the same call —
+ * delivered nudges are not retained. Also sweeps anything undelivered past its
+ * TTL so the table only ever holds a few seconds of in-flight nudges.
+ */
+export async function takePendingNudges(userId: string): Promise<IncomingNudge[]> {
+  await supabaseAdmin
+    .from("reader_nudges")
+    .delete()
+    .lt("created_at", new Date(Date.now() - NUDGE_TTL_MS).toISOString());
+
+  const { data } = await supabaseAdmin
+    .from("reader_nudges")
+    .select("id, from_user_id, kind, body")
+    .eq("to_user_id", userId)
+    .order("created_at", { ascending: true });
+  const rows = (data ?? []) as {
+    id: string;
+    from_user_id: string;
+    kind: NudgeKind;
+    body: string | null;
+  }[];
+  if (rows.length === 0) return [];
+
+  const fromIds = Array.from(new Set(rows.map((r) => r.from_user_id)));
+  const { data: users } = await supabaseAdmin.from("users").select("id, name").in("id", fromIds);
+  const nameById = new Map((users ?? []).map((u) => [u.id as string, u.name as string]));
+
+  // Delete-on-deliver: remove exactly the rows we're handing back.
+  await supabaseAdmin
+    .from("reader_nudges")
+    .delete()
+    .in("id", rows.map((r) => r.id));
+
+  return rows.map((r) => ({
+    id: r.id,
+    fromName: nameById.get(r.from_user_id) ?? "Someone",
+    kind: r.kind,
+    body: r.body,
+  }));
 }
 
 /** Clear a single chapter's read mark for this reader (undo). */
@@ -685,6 +1000,356 @@ export async function resolveResumeChapter(
     progress?.chapter_id && chapters.find((c) => c.id === progress.chapter_id);
   const target = last || chapters[0];
   return { chapterId: target.id, title: target.title, resuming: Boolean(last) };
+}
+
+// ============================================================
+// Reading-stats dashboard
+// ============================================================
+
+export interface ReaderStatsSummary {
+  userId: string;
+  name: string;
+  avatarUrl: string | null;
+  totalSeconds: number;
+  booksStarted: number;
+  booksFinished: number;
+  currentStreak: number;
+  longestStreak: number;
+  activeDays: number;
+  lastReadAt: string | null;
+}
+
+export interface ChapterTime {
+  chapterId: string;
+  number: number;
+  title: string;
+  seconds: number;
+}
+
+export interface BookStats {
+  bookId: string;
+  title: string;
+  total: number;
+  readCount: number;
+  pct: number;
+  currentChapterNumber: number | null;
+  totalSeconds: number;
+  estRemainingSeconds: number | null;
+  chapters: ChapterTime[];
+}
+
+export interface DayHours {
+  day: string; // YYYY-MM-DD
+  total: number;
+  hours: number[]; // length 24
+}
+
+export interface ReaderStats {
+  summary: ReaderStatsSummary;
+  books: BookStats[];
+  hourlyByDay: DayHours[]; // newest day first
+  hourTotals: number[]; // length 24, across all days
+}
+
+export type ReaderStatsResult =
+  | { kind: "stats"; stats: ReaderStats }
+  | { kind: "private"; name: string; avatarUrl: string | null }
+  | { kind: "notfound" };
+
+function ymd(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate()
+  ).padStart(2, "0")}`;
+}
+
+/** Current + longest streak (in days) and total active days from a list of days. */
+function computeStreaks(days: string[]): {
+  current: number;
+  longest: number;
+  activeDays: number;
+} {
+  const set = new Set(days);
+  if (set.size === 0) return { current: 0, longest: 0, activeDays: 0 };
+  const sorted = Array.from(set).sort(); // lexicographic = chronological for YYYY-MM-DD
+  const DAY = 86_400_000;
+
+  let longest = 1;
+  let run = 1;
+  for (let i = 1; i < sorted.length; i++) {
+    const diff = Math.round(
+      (new Date(`${sorted[i]}T00:00:00`).getTime() -
+        new Date(`${sorted[i - 1]}T00:00:00`).getTime()) /
+        DAY
+    );
+    if (diff === 1) run++;
+    else run = 1;
+    if (run > longest) longest = run;
+  }
+
+  const today = new Date();
+  const todayStr = ymd(today);
+  const yestStr = ymd(new Date(today.getTime() - DAY));
+  let current = 0;
+  if (set.has(todayStr) || set.has(yestStr)) {
+    let cursor = set.has(todayStr) ? today : new Date(today.getTime() - DAY);
+    while (set.has(ymd(cursor))) {
+      current++;
+      cursor = new Date(cursor.getTime() - DAY);
+    }
+  }
+  return { current, longest, activeDays: set.size };
+}
+
+/**
+ * Per-reader summary rows for the stats overview. Only readers who share their
+ * activity are included (plus the viewer themselves). Sorted by time read.
+ */
+export async function getReadingStatsOverview(viewerId: string): Promise<ReaderStatsSummary[]> {
+  const [{ data: pub }, { data: users }, { data: settings }, { data: reads }, { data: times }, { data: progress }, { data: hours }] =
+    await Promise.all([
+      supabaseAdmin.from("chapters").select("id, book_id").eq("status", "published"),
+      supabaseAdmin.from("users").select("id, name").eq("revoked", false).eq("role", "reader"),
+      supabaseAdmin.from("reader_settings").select("user_id, share_activity"),
+      supabaseAdmin.from("chapter_reads").select("user_id, book_id, chapter_id"),
+      supabaseAdmin.from("reading_time").select("user_id, total_seconds, updated_at"),
+      supabaseAdmin.from("reading_progress").select("user_id, updated_at"),
+      supabaseAdmin.from("reading_time_hourly").select("user_id, day"),
+    ]);
+
+  const publishedByBook = new Map<string, Set<string>>();
+  for (const c of pub ?? []) {
+    const s = publishedByBook.get(c.book_id as string) ?? new Set<string>();
+    s.add(c.id as string);
+    publishedByBook.set(c.book_id as string, s);
+  }
+
+  const readerList = (users ?? []) as { id: string; name: string }[];
+  const avatars = await getAvatars(readerList.map((u) => u.id));
+  const shareById = new Map(
+    (settings ?? []).map((s) => [s.user_id as string, (s as { share_activity: boolean | null }).share_activity])
+  );
+
+  const readsByUser = new Map<string, Map<string, Set<string>>>();
+  for (const r of reads ?? []) {
+    const pubSet = publishedByBook.get(r.book_id as string);
+    if (!pubSet || !pubSet.has(r.chapter_id as string)) continue;
+    let m = readsByUser.get(r.user_id as string);
+    if (!m) {
+      m = new Map();
+      readsByUser.set(r.user_id as string, m);
+    }
+    let set = m.get(r.book_id as string);
+    if (!set) {
+      set = new Set();
+      m.set(r.book_id as string, set);
+    }
+    set.add(r.chapter_id as string);
+  }
+
+  const timeByUser = new Map<string, number>();
+  const lastByUser = new Map<string, string>();
+  const bump = (uid: string, at: string | null | undefined) => {
+    if (at && (!lastByUser.get(uid) || at > (lastByUser.get(uid) as string))) lastByUser.set(uid, at);
+  };
+  for (const t of times ?? []) {
+    timeByUser.set(
+      t.user_id as string,
+      (timeByUser.get(t.user_id as string) ?? 0) + ((t.total_seconds as number) ?? 0)
+    );
+    bump(t.user_id as string, t.updated_at as string);
+  }
+  for (const p of progress ?? []) bump(p.user_id as string, p.updated_at as string);
+
+  const daysByUser = new Map<string, string[]>();
+  for (const h of hours ?? []) {
+    const arr = daysByUser.get(h.user_id as string) ?? [];
+    arr.push(h.day as string);
+    daysByUser.set(h.user_id as string, arr);
+  }
+
+  const rows: ReaderStatsSummary[] = [];
+  for (const u of readerList) {
+    const isSelf = u.id === viewerId;
+    if (!isSelf && shareById.get(u.id) === false) continue; // opted out — hidden from others
+    const booksMap = readsByUser.get(u.id) ?? new Map<string, Set<string>>();
+    let booksFinished = 0;
+    for (const [bId, set] of booksMap) {
+      const pubCount = publishedByBook.get(bId)?.size ?? 0;
+      if (pubCount > 0 && set.size >= pubCount) booksFinished++;
+    }
+    const streaks = computeStreaks(daysByUser.get(u.id) ?? []);
+    rows.push({
+      userId: u.id,
+      name: u.name,
+      avatarUrl: avatars.get(u.id) ?? null,
+      totalSeconds: timeByUser.get(u.id) ?? 0,
+      booksStarted: booksMap.size,
+      booksFinished,
+      currentStreak: streaks.current,
+      longestStreak: streaks.longest,
+      activeDays: streaks.activeDays,
+      lastReadAt: lastByUser.get(u.id) ?? null,
+    });
+  }
+  rows.sort((a, b) => b.totalSeconds - a.totalSeconds || a.name.localeCompare(b.name));
+  return rows;
+}
+
+/** Full stats for one reader's detail page (respects the share-activity opt-out). */
+export async function getReaderStats(viewerId: string, targetId: string): Promise<ReaderStatsResult> {
+  const { data: target } = await supabaseAdmin
+    .from("users")
+    .select("id, name, role, revoked")
+    .eq("id", targetId)
+    .maybeSingle();
+  if (!target || target.revoked || target.role !== "reader") return { kind: "notfound" };
+
+  const avatarUrl = await getAvatar(targetId);
+
+  if (targetId !== viewerId) {
+    const { data: setting } = await supabaseAdmin
+      .from("reader_settings")
+      .select("share_activity")
+      .eq("user_id", targetId)
+      .maybeSingle();
+    if (setting && setting.share_activity === false) {
+      return { kind: "private", name: target.name as string, avatarUrl };
+    }
+  }
+
+  const [{ data: pub }, { data: reads }, { data: times }, { data: progress }, { data: chTimes }, { data: hours }] =
+    await Promise.all([
+      supabaseAdmin
+        .from("chapters")
+        .select("id, book_id, title, position")
+        .eq("status", "published")
+        .order("position", { ascending: true }),
+      supabaseAdmin.from("chapter_reads").select("book_id, chapter_id").eq("user_id", targetId),
+      supabaseAdmin.from("reading_time").select("book_id, total_seconds, updated_at").eq("user_id", targetId),
+      supabaseAdmin.from("reading_progress").select("book_id, chapter_id, updated_at").eq("user_id", targetId),
+      supabaseAdmin.from("chapter_reading_time").select("book_id, chapter_id, total_seconds").eq("user_id", targetId),
+      supabaseAdmin.from("reading_time_hourly").select("day, hour_of_day, seconds").eq("user_id", targetId),
+    ]);
+
+  // Published chapters grouped/ordered per book.
+  const chaptersByBook = new Map<string, { id: string; title: string }[]>();
+  for (const c of pub ?? []) {
+    const arr = chaptersByBook.get(c.book_id as string) ?? [];
+    arr.push({ id: c.id as string, title: c.title as string });
+    chaptersByBook.set(c.book_id as string, arr);
+  }
+  const numberById = new Map<string, number>();
+  const bookIdByChapter = new Map<string, string>();
+  for (const [bId, list] of chaptersByBook) {
+    list.forEach((c, i) => {
+      numberById.set(c.id, i + 1);
+      bookIdByChapter.set(c.id, bId);
+    });
+  }
+
+  const readsByBook = new Map<string, Set<string>>();
+  for (const r of reads ?? []) {
+    if (!numberById.has(r.chapter_id as string)) continue;
+    const set = readsByBook.get(r.book_id as string) ?? new Set<string>();
+    set.add(r.chapter_id as string);
+    readsByBook.set(r.book_id as string, set);
+  }
+  const timeByBook = new Map<string, number>();
+  let lastReadAt: string | null = null;
+  for (const t of times ?? []) {
+    timeByBook.set(t.book_id as string, (t.total_seconds as number) ?? 0);
+    if (t.updated_at && (!lastReadAt || (t.updated_at as string) > lastReadAt)) lastReadAt = t.updated_at as string;
+  }
+  const progByBook = new Map<string, string | null>();
+  for (const p of progress ?? []) {
+    progByBook.set(p.book_id as string, (p.chapter_id as string) ?? null);
+    if (p.updated_at && (!lastReadAt || (p.updated_at as string) > lastReadAt)) lastReadAt = p.updated_at as string;
+  }
+  const chapterSeconds = new Map<string, number>();
+  for (const ct of chTimes ?? []) chapterSeconds.set(ct.chapter_id as string, (ct.total_seconds as number) ?? 0);
+
+  // Book titles for started books.
+  const startedBookIds = Array.from(
+    new Set([...readsByBook.keys(), ...progByBook.keys()].filter((b) => chaptersByBook.has(b)))
+  );
+  const titleById = new Map<string, string>();
+  if (startedBookIds.length) {
+    const { data: books } = await supabaseAdmin.from("books").select("id, title").in("id", startedBookIds);
+    for (const b of books ?? []) titleById.set(b.id as string, b.title as string);
+  }
+
+  const books: BookStats[] = [];
+  let booksFinished = 0;
+  let totalSeconds = 0;
+  for (const bId of startedBookIds) {
+    const list = chaptersByBook.get(bId) ?? [];
+    const total = list.length;
+    const readSet = readsByBook.get(bId) ?? new Set<string>();
+    const readCount = readSet.size;
+    const pct = total > 0 ? Math.min(100, Math.round((readCount / total) * 100)) : 0;
+    const bookSeconds = timeByBook.get(bId) ?? 0;
+    totalSeconds += bookSeconds;
+    if (total > 0 && readCount >= total) booksFinished++;
+
+    const curId = progByBook.get(bId) ?? null;
+    const chapters: ChapterTime[] = list
+      .map((c) => ({
+        chapterId: c.id,
+        number: numberById.get(c.id) ?? 0,
+        title: c.title,
+        seconds: chapterSeconds.get(c.id) ?? 0,
+      }))
+      .filter((c) => c.seconds > 0);
+
+    const avgPerRead = readCount > 0 ? bookSeconds / readCount : 0;
+    const remaining = total - readCount;
+    books.push({
+      bookId: bId,
+      title: titleById.get(bId) ?? "Untitled",
+      total,
+      readCount,
+      pct,
+      currentChapterNumber: curId ? numberById.get(curId) ?? null : null,
+      totalSeconds: bookSeconds,
+      estRemainingSeconds: avgPerRead > 0 && remaining > 0 ? Math.round(avgPerRead * remaining) : null,
+      chapters,
+    });
+  }
+  books.sort((a, b) => b.totalSeconds - a.totalSeconds);
+
+  // Hourly grouped by day.
+  const byDay = new Map<string, number[]>();
+  const hourTotals = new Array(24).fill(0);
+  for (const h of hours ?? []) {
+    const day = h.day as string;
+    const hour = h.hour_of_day as number;
+    const secs = (h.seconds as number) ?? 0;
+    const arr = byDay.get(day) ?? new Array(24).fill(0);
+    arr[hour] = (arr[hour] ?? 0) + secs;
+    byDay.set(day, arr);
+    hourTotals[hour] += secs;
+  }
+  const hourlyByDay: DayHours[] = Array.from(byDay.entries())
+    .map(([day, hrs]) => ({ day, hours: hrs, total: hrs.reduce((s, v) => s + v, 0) }))
+    .sort((a, b) => (a.day < b.day ? 1 : -1)); // newest first
+
+  const allDays = Array.from(byDay.keys());
+  const streaks = computeStreaks(allDays);
+
+  const summary: ReaderStatsSummary = {
+    userId: targetId,
+    name: target.name as string,
+    avatarUrl,
+    totalSeconds,
+    booksStarted: startedBookIds.length,
+    booksFinished,
+    currentStreak: streaks.current,
+    longestStreak: streaks.longest,
+    activeDays: streaks.activeDays,
+    lastReadAt,
+  };
+
+  return { kind: "stats", stats: { summary, books, hourlyByDay, hourTotals } };
 }
 
 // ============================================================

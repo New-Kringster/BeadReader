@@ -349,3 +349,9 @@ button:not(.btn):not(.reader-icon):not(:disabled):active {
   border: 1px solid color-mix(in oklab, currentColor 25%, transparent);
   padding: 0.4em 0.6em; text-align: left;
 }
+
+/* Ephemeral nudge toast entrance. */
+@keyframes nudge-in {
+  from { opacity: 0; transform: translateY(-0.4rem); }
+  to   { opacity: 1; transform: translateY(0); }
+}

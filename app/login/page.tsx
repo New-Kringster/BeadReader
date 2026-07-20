@@ -3,6 +3,7 @@ import { useActionState } from "react";
 import { loginAction, type LoginState } from "@/app/actions/auth";
 import ThemeToggle from "@/components/ThemeToggle";
 import Logo from "@/components/Logo";
+import VersionFooter from "@/components/VersionFooter";
 
 export default function LoginPage() {
   const [state, formAction, pending] = useActionState<LoginState, FormData>(
@@ -57,6 +58,8 @@ export default function LoginPage() {
           No account? Ask the library owner for a code.
         </p>
       </div>
+
+      <VersionFooter className="absolute inset-x-0 bottom-4" />
     </main>
   );
 }
