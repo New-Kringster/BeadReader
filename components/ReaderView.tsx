@@ -115,6 +115,13 @@ export default function ReaderView({
     postJSON("/api/read", { bookId, chapterId: chapter.id });
   }, [bookId, chapter.id]);
 
+  // Warm the client cache for the neighbouring chapters so moving on is instant
+  // and doesn't refetch.
+  useEffect(() => {
+    if (next) router.prefetch(`/read/${bookId}/${next.id}`);
+    if (prev) router.prefetch(`/read/${bookId}/${prev.id}`);
+  }, [bookId, next, prev, router]);
+
   // ---- reading-time tracking (active seconds) ----
   const activeSecondsRef = useRef(0);
   const lastActiveRef = useRef(0); // stamped to now() when the ticker effect mounts

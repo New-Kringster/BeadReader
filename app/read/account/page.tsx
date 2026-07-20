@@ -7,6 +7,7 @@ import ReaderNav from "@/components/ReaderNav";
 import ChangeCodeCard from "@/components/ChangeCodeCard";
 import ShareActivityToggle from "@/components/ShareActivityToggle";
 import AvatarUpload from "@/components/AvatarUpload";
+import ClearCacheButton from "@/components/ClearCacheButton";
 
 export default async function AccountPage() {
   const user = (await getCurrentUser())!;
@@ -66,6 +67,19 @@ export default async function AccountPage() {
 
         <h2 className="text-lg font-semibold mt-8 mb-3">Access code</h2>
         <ChangeCodeCard currentCode={user.access_code} />
+
+        <h2 className="text-lg font-semibold mt-8 mb-3">Storage</h2>
+        <div className="card p-6 max-w-md">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="font-medium">On-device cache</div>
+              <p className="mt-0.5 text-xs text-muted">
+                Covers and artwork are stored on your device so pages load faster and use less data.
+              </p>
+            </div>
+            <ClearCacheButton />
+          </div>
+        </div>
 
         <p className="text-sm text-muted mt-6">
           Reading colors, font size, and scroll/page layout are adjustable from the{" "}

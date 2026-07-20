@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import GlobalNavProgress from "@/components/GlobalNavProgress";
 import VersionWatcher from "@/components/VersionWatcher";
+import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
 
 export const metadata: Metadata = {
   title: "BeadReader",
@@ -42,6 +43,7 @@ export default function RootLayout({
         <GlobalNavProgress />
         {children}
         <VersionWatcher />
+        <ServiceWorkerRegister />
       </body>
     </html>
   );

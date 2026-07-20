@@ -91,6 +91,12 @@ export default function WebtoonReaderView({
     postJSON("/api/read", { bookId, chapterId: chapter.id });
   }, [bookId, chapter.id]);
 
+  // Warm the client cache for the neighbouring chapters for instant moves.
+  useEffect(() => {
+    if (next) router.prefetch(chapterHref(next.id));
+    if (prev) router.prefetch(chapterHref(prev.id));
+  }, [chapterHref, next, prev, router]);
+
   const activeSecondsRef = useRef(0);
   const lastActiveRef = useRef(0);
   // Reading time + presence in one flush (see ReaderView for the rationale).
