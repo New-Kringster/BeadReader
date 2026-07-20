@@ -2,7 +2,9 @@
 
 A small, private online book reader. An **admin** publishes text books in Markdown
 or optional image-based webtoons; **readers** log in with a single access code and read —
-with the app remembering exactly where each reader left off.
+with the app remembering exactly where each reader left off. Readers can also see who
+else is around, react in the moment, and follow everyone's reading in a shared stats
+dashboard.
 
 Built with **Next.js (App Router) + Tailwind CSS v4 + Supabase (Postgres + Storage)**.
 Designed for one admin and a handful of readers — not a public product.
@@ -72,6 +74,31 @@ adding books and readers. That's the entire setup.
   - **Prev/next chapter** navigation (buttons, an end-of-chapter button, arrow keys)
     and a Contents drawer.
   - **Active reading-time tracking** that pauses when the tab loses focus or goes idle.
+- **Reading together (social)**
+  - **Presence**: see who's online from the library ("Online now") and inside a book
+    (a small avatar cluster at the top of the reader, each with a green dot).
+  - **Same-book indicator**: a reader in the exact book you're in gets a green ring and
+    a chapter-number status dot, so you can tell a friend is right there with you.
+  - **Bump & quick message**: tap the cluster to see who's around and send a 👋 bump or a
+    short note. These are ephemeral — they pop up on the other screen for a few seconds
+    and then disappear; nothing is saved.
+  - **Profile photos**: upload a photo (cropped and compressed in the browser) that shows
+    next to your name wherever readers appear.
+  - **Privacy**: a per-reader "Share my reading activity" toggle — turn it off to be
+    hidden from presence and stats while still seeing everyone else.
+  - **Reading-stats dashboard** (`/read/stats`): total time, books finished, streaks, a
+    "when do you read" histogram you scroll day by day, and a per-book, per-chapter time
+    breakdown — visible for every reader who shares their activity.
+- **Speed & offline**
+  - A service worker caches covers, artwork and static files on-device (never HTML/API),
+    and the reader pre-loads the next chapter, so pages open fast and use less data.
+  - **Account → Storage** shows exactly what's cached (covers, artwork by chapter, app
+    files, size used, saved preferences) and a **Clear all saved data** button.
+- **In-app updates**
+  - App version + a **Changelog** link on the login and library pages, a public
+    `/changelog`, and a once-per-version **what's-new popup** with per-feature "how to
+    use" steps. A refresh prompt appears when a newer build is deployed — sourced from
+    the Vercel build, never the database.
 - **Explicit-content gate** enforced in the database query itself — gated chapters
   never leave the server for a reader without access (not just hidden with CSS).
 - Light/dark app theme with a toggle, plus per-reader reading themes.
@@ -88,6 +115,10 @@ adding books and readers. That's the entire setup.
 | Route protection | [proxy.ts](proxy.ts) (cookie check) + `requireAdmin`/`requireUser` in layouts |
 | Server actions | [app/actions/](app/actions/) |
 | Reader engine | [components/ReaderView.tsx](components/ReaderView.tsx) |
+| Presence + nudges (one poll) | [components/PresenceProvider.tsx](components/PresenceProvider.tsx), [app/api/presence/](app/api/presence/), [app/api/nudge/](app/api/nudge/) |
+| Reading stats | [app/read/stats/](app/read/stats/) + `getReadingStatsOverview` / `getReaderStats` in [lib/data.ts](lib/data.ts) |
+| Version / changelog / update prompt | [lib/version.ts](lib/version.ts), [lib/changelog.ts](lib/changelog.ts), [app/api/version/](app/api/version/), [components/VersionWatcher.tsx](components/VersionWatcher.tsx) |
+| On-device asset cache | [public/sw.js](public/sw.js), [components/ServiceWorkerRegister.tsx](components/ServiceWorkerRegister.tsx) |
 
 Because auth is custom (not Supabase Auth), **all database access runs server-side
 with the `service_role` key**, which bypasses RLS. Every table has RLS *enabled with
