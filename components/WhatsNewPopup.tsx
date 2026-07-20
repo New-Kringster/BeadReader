@@ -53,10 +53,15 @@ export default function WhatsNewPopup() {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="border-b border-line px-5 py-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-accent">
-            New in v{entry.version}
+          <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-accent">
+            {entry.major && (
+              <span className="rounded-full bg-accent px-2 py-0.5 font-semibold text-[var(--accent-ink)]">
+                Major update
+              </span>
+            )}
+            <span>New in v{entry.version}</span>
           </p>
-          <h2 className="text-lg font-bold">{entry.title}</h2>
+          <h2 className="mt-1.5 text-lg font-bold">{entry.title}</h2>
           {entry.intro && <p className="mt-1 text-sm text-muted">{entry.intro}</p>}
         </div>
 

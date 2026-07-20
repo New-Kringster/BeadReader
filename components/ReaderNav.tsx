@@ -3,8 +3,10 @@ import LogoutButton from "@/components/LogoutButton";
 import ThemeToggle from "@/components/ThemeToggle";
 import Logo from "@/components/Logo";
 
-// Compact icon-button styling shared by every item in the nav's right cluster,
-// so the bar stays on one line on phones.
+// Icon-only on phones (keeps the bar on one line); icon + label from `sm` up.
+const navItem =
+  "flex h-9 items-center justify-center gap-1.5 rounded-lg px-2 sm:px-2.5 text-sm text-muted hover:bg-line/60 hover:text-ink transition-colors";
+// Square icon-only button (the theme toggle, which has no sensible label).
 const iconBtn =
   "flex h-9 w-9 items-center justify-center rounded-lg text-muted hover:bg-line/60 hover:text-ink transition-colors";
 
@@ -21,9 +23,9 @@ const svg = {
 
 function NavIcon({ href, label, children }: { href: string; label: string; children: React.ReactNode }) {
   return (
-    <Link href={href} className={iconBtn} title={label} aria-label={label}>
+    <Link href={href} className={navItem} title={label} aria-label={label}>
       {children}
-      <span className="sr-only">{label}</span>
+      <span className="hidden sm:inline">{label}</span>
     </Link>
   );
 }
@@ -68,12 +70,13 @@ export default function ReaderNav({ backHref, backLabel }: { backHref?: string; 
             </svg>
           </NavIcon>
           <ThemeToggle className={iconBtn} />
-          <LogoutButton className={iconBtn}>
+          <LogoutButton className={navItem}>
             <svg {...svg} aria-hidden>
               <path d="M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3" />
               <path d="M14 12H21" />
               <path d="M18 9l3 3-3 3" />
             </svg>
+            <span className="hidden sm:inline">Log out</span>
           </LogoutButton>
         </nav>
       </div>

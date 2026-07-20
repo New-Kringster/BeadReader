@@ -21,6 +21,8 @@ export interface ChangelogEntry {
   date: string; // YYYY-MM-DD
   title: string;
   intro?: string;
+  /** Marks a big release — shown with a "Major update" badge. */
+  major?: boolean;
   items: ChangelogItem[];
 }
 
@@ -29,6 +31,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     version: "1.1.0",
     date: "2026-07-20",
     title: "Reading together — with stats and speed",
+    major: true,
     intro: "A big update: see who else is reading and react in the moment, give yourself a profile photo, track everyone's reading in a new stats dashboard, and enjoy faster loading.",
     items: [
       {

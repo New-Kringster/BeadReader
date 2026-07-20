@@ -36,6 +36,11 @@ export default async function ChangelogPage() {
           <section key={entry.version}>
             <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <h2 className="text-lg font-semibold">{entry.title}</h2>
+              {entry.major && (
+                <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-semibold text-[var(--accent-ink)]">
+                  Major update
+                </span>
+              )}
               <span className="rounded-full bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent">
                 v{entry.version}
               </span>
