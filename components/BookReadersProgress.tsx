@@ -40,18 +40,17 @@ export default function BookReadersProgress({
           const isOnline = onlineHere.has(r.userId);
           return (
             <li key={r.userId} className="flex items-center gap-3 px-4 py-3">
-              <span
-                aria-hidden
-                className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-accent/15 text-sm font-semibold text-accent"
-              >
-                {r.avatarUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={r.avatarUrl} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  initial(r.name)
-                )}
+              <span aria-hidden className="relative inline-block h-8 w-8 shrink-0">
+                <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-accent/15 text-sm font-semibold text-accent">
+                  {r.avatarUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={r.avatarUrl} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    initial(r.name)
+                  )}
+                </span>
                 {isOnline && (
-                  <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-panel" />
+                  <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-panel" />
                 )}
               </span>
 

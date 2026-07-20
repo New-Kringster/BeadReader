@@ -10,11 +10,11 @@ function initial(name: string): string {
 }
 
 function Avatar({ reader, surface }: { reader: PresenceEntry; surface: string }) {
-  const ring = reader.sameBook ? { boxShadow: `0 0 0 2px ${ONLINE}` } : undefined;
+  // The outer wrapper is NOT clipped, so the status dot / chapter badge can sit
+  // just outside the circle. Only the inner disc clips the photo to a circle.
   return (
     <span
-      className="relative inline-flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full text-xs font-semibold"
-      style={{ backgroundColor: "color-mix(in oklab, currentColor 16%, transparent)", ...ring }}
+      className="relative inline-block h-7 w-7 shrink-0"
       title={
         reader.bookTitle
           ? `${reader.name} — ${reader.bookTitle}${
@@ -23,22 +23,30 @@ function Avatar({ reader, surface }: { reader: PresenceEntry; surface: string })
           : `${reader.name} — online`
       }
     >
-      {reader.avatarUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={reader.avatarUrl} alt="" className="h-full w-full object-cover" />
-      ) : (
-        initial(reader.name)
-      )}
+      <span
+        className="flex h-full w-full items-center justify-center overflow-hidden rounded-full text-xs font-semibold"
+        style={{
+          backgroundColor: "color-mix(in oklab, currentColor 16%, transparent)",
+          ...(reader.sameBook ? { boxShadow: `0 0 0 2px ${ONLINE}` } : {}),
+        }}
+      >
+        {reader.avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={reader.avatarUrl} alt="" className="h-full w-full object-cover" />
+        ) : (
+          initial(reader.name)
+        )}
+      </span>
       {reader.sameBook && reader.chapterNumber ? (
         <span
-          className="absolute -bottom-1 -right-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none text-white"
+          className="absolute -bottom-1 -right-1 flex h-[15px] min-w-[15px] items-center justify-center rounded-full px-[3px] text-[9px] font-bold leading-none text-white"
           style={{ backgroundColor: ONLINE, boxShadow: `0 0 0 2px ${surface}` }}
         >
           {reader.chapterNumber}
         </span>
       ) : (
         <span
-          className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full"
+          className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full"
           style={{ backgroundColor: ONLINE, boxShadow: `0 0 0 2px ${surface}` }}
         />
       )}
@@ -179,7 +187,7 @@ export default function PresenceCluster({ surface }: { surface: string }) {
     <div ref={wrapRef} className="relative">
       <button
         type="button"
-        className="flex items-center -space-x-2 rounded-full p-0.5"
+        className="flex items-center gap-1.5 rounded-full p-0.5"
         onClick={() => setOpen((v) => !v)}
         aria-label={`${online.length} reader${online.length > 1 ? "s" : ""} online`}
         aria-expanded={open}
@@ -189,7 +197,7 @@ export default function PresenceCluster({ surface }: { surface: string }) {
         ))}
         {extra > 0 && (
           <span
-            className="relative inline-flex h-7 min-w-[1.75rem] items-center justify-center rounded-full px-1 text-[11px] font-semibold"
+            className="inline-flex h-7 min-w-[1.75rem] items-center justify-center rounded-full px-1 text-[11px] font-semibold"
             style={{ backgroundColor: "color-mix(in oklab, currentColor 16%, transparent)" }}
           >
             +{extra}
