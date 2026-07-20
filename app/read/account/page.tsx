@@ -1,17 +1,19 @@
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getSettings } from "@/lib/data";
 import { formatDuration } from "@/lib/format";
 import ReaderNav from "@/components/ReaderNav";
 import ChangeCodeCard from "@/components/ChangeCodeCard";
+import ShareActivityToggle from "@/components/ShareActivityToggle";
 
 export default async function AccountPage() {
   const user = (await getCurrentUser())!;
 
-  const { data: times } = await supabaseAdmin
-    .from("reading_time")
-    .select("total_seconds")
-    .eq("user_id", user.id);
+  const [{ data: times }, settings] = await Promise.all([
+    supabaseAdmin.from("reading_time").select("total_seconds").eq("user_id", user.id),
+    getSettings(user.id),
+  ]);
   const totalSeconds = (times ?? []).reduce((s, t) => s + (t.total_seconds ?? 0), 0);
 
   return (
@@ -51,6 +53,12 @@ export default async function AccountPage() {
             <div className="font-medium">{formatDuration(totalSeconds)}</div>
           </div>
         </div>
+
+        {user.role === "reader" && (
+          <div className="card p-6 mt-6 max-w-md">
+            <ShareActivityToggle initial={settings.share_activity ?? true} />
+          </div>
+        )}
 
         <h2 className="text-lg font-semibold mt-8 mb-3">Access code</h2>
         <ChangeCodeCard currentCode={user.access_code} />
