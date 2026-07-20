@@ -10,6 +10,8 @@ export interface ChangelogItem {
   body: string;
   /** How to use it, in one plain sentence. */
   how?: string;
+  /** Optional preview image (path under /public), preferred over `art`. */
+  image?: string;
   /** Optional illustration key (rendered by components/ChangelogArt). */
   art?: ChangelogArt;
 }
@@ -24,6 +26,29 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.2.0",
+    date: "2026-07-20",
+    title: "Your reading, visualized — and faster",
+    intro: "A stats dashboard for everyone, plus quicker page loads.",
+    items: [
+      {
+        title: "Reading stats dashboard",
+        body: "See how everyone's reading is going. Each reader has a page with their total time, books started and finished, current streak, a “when do you read” chart you can scroll through day by day, and a per-book breakdown showing how long each chapter took.",
+        how: "Open Stats from the top menu, then tap any reader.",
+        image: "/changelog/stats.png",
+      },
+      {
+        title: "Faster loading, fewer data used",
+        body: "Book covers, artwork and app files are now kept on your device after the first load, so pages open faster and use less data on repeat visits. The reader also gets the next chapter ready in advance, so moving on is instant.",
+      },
+      {
+        title: "Clear cached data",
+        body: "If something ever looks out of date or you want to free up space, you can wipe the on-device cache and reload everything fresh.",
+        how: "Go to Account → Storage → Clear cached data.",
+      },
+    ],
+  },
+  {
     version: "1.1.0",
     date: "2026-07-20",
     title: "Reading together",
@@ -33,7 +58,7 @@ export const CHANGELOG: ChangelogEntry[] = [
         title: "See who's online",
         body: "When another reader is in the library at the same time as you, they now show up under “Online now” on your library screen, along with the book and chapter they're on. Inside a book, a small row of reader icons appears at the top — each with a green dot when they're online.",
         how: "Open your library, or a book, and look for the green dots — no setup needed.",
-        art: "presence",
+        image: "/changelog/presence.png",
       },
       {
         title: "Know when someone's reading the same book",
@@ -45,13 +70,13 @@ export const CHANGELOG: ChangelogEntry[] = [
         title: "Bump a friend or send a quick note",
         body: "Tap the reader icons at the top of a book to see who's around. From there you can send a friendly “bump” or a short message. These are just-for-fun, in-the-moment notes — they pop up on the other person's screen for a few seconds and then disappear. Nothing is saved.",
         how: "Tap the reader icons at the top of the reader, then use 👋 to bump or 💬 to send a quick note.",
-        art: "nudge",
+        image: "/changelog/nudge.png",
       },
       {
         title: "Add a profile photo",
         body: "Give yourself a face. Your photo shows up next to your name wherever readers appear — the online list, the “who's reading” list, and beside the reader icons. Photos are automatically cropped to a neat circle and shrunk down, so even a big phone picture uploads quickly.",
         how: "Go to Account → Profile photo → Upload photo.",
-        art: "avatar",
+        image: "/changelog/avatar.png",
       },
       {
         title: "Choose whether to be seen",

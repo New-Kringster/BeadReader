@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { CHANGELOG } from "@/lib/changelog";
 import { APP_VERSION } from "@/lib/version";
 import Logo from "@/components/Logo";
-import ChangelogArt from "@/components/ChangelogArt";
+import ChangelogVisual from "@/components/ChangelogVisual";
 
 export const metadata: Metadata = { title: "What's new · BeadReader" };
 
@@ -53,9 +53,9 @@ export default async function ChangelogPage() {
                       <span className="font-medium">How:</span> {item.how}
                     </p>
                   )}
-                  {item.art && (
+                  {(item.image || item.art) && (
                     <div className="mt-3">
-                      <ChangelogArt art={item.art} />
+                      <ChangelogVisual item={item} />
                     </div>
                   )}
                 </li>

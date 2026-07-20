@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { APP_VERSION } from "@/lib/version";
 import { changelogFor } from "@/lib/changelog";
-import ChangelogArt from "@/components/ChangelogArt";
+import ChangelogVisual from "@/components/ChangelogVisual";
 
 const SEEN_KEY = "br_seen_version";
 
@@ -70,9 +70,9 @@ export default function WhatsNewPopup() {
                   <span className="font-medium">How:</span> {item.how}
                 </p>
               )}
-              {item.art && (
+              {(item.image || item.art) && (
                 <div className="mt-2.5">
-                  <ChangelogArt art={item.art} />
+                  <ChangelogVisual item={item} />
                 </div>
               )}
             </div>
