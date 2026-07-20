@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ChapterComments from "@/components/ChapterComments";
 import NavProgress from "@/components/NavProgress";
+import PresenceCluster from "@/components/PresenceCluster";
 
 interface NavChapter {
   id: string;
@@ -92,14 +93,28 @@ export default function WebtoonReaderView({
 
   const activeSecondsRef = useRef(0);
   const lastActiveRef = useRef(0);
+  // Reading time + presence in one flush (see ReaderView for the rationale).
+  // Always posts so presence stays fresh; `activeOverride` forces an inactive
+  // beat on hide so the reader drops offline promptly.
   const flushTime = useCallback(
-    (beacon = false) => {
+    (beacon = false, activeOverride?: boolean) => {
       const seconds = activeSecondsRef.current;
-      if (seconds <= 0) return;
       activeSecondsRef.current = 0;
-      postJSON("/api/reading-time", { bookId, seconds }, beacon);
+      const active =
+        activeOverride ??
+        (document.visibilityState === "visible" &&
+          document.hasFocus() &&
+          Date.now() - lastActiveRef.current < IDLE_MS);
+      const el = scrollRef.current;
+      const max = el ? el.scrollHeight - el.clientHeight : 0;
+      const scrollFraction = el && max > 0 ? Math.min(1, Math.max(0, el.scrollTop / max)) : 0;
+      postJSON(
+        "/api/reading-time",
+        { bookId, seconds, chapterId: chapter.id, scrollFraction, active },
+        beacon
+      );
     },
-    [bookId]
+    [bookId, chapter.id]
   );
 
   useEffect(() => {
@@ -114,10 +129,12 @@ export default function WebtoonReaderView({
         Date.now() - lastActiveRef.current < IDLE_MS;
       if (active) activeSecondsRef.current += 1;
     }, 1000);
+    // Beat immediately so the reader shows up online on open / chapter change.
+    flushTime(false);
     const flush = window.setInterval(() => flushTime(false), FLUSH_MS);
-    const onHide = () => flushTime(true);
+    const onHide = () => flushTime(true, false);
     const onVisibility = () => {
-      if (document.visibilityState === "hidden") flushTime(true);
+      if (document.visibilityState === "hidden") flushTime(true, false);
     };
     window.addEventListener("pagehide", onHide);
     document.addEventListener("visibilitychange", onVisibility);
@@ -219,7 +236,10 @@ export default function WebtoonReaderView({
           ← {bookTitle}
         </Link>
         <span className="opacity-60 truncate hidden sm:inline">/ {chapter.title}</span>
-        <button className="reader-icon ml-auto" onClick={() => setShowToc(true)} title="Contents">☰</button>
+        <div className="ml-auto flex items-center gap-2">
+          {!isAdmin && !adminPreview && <PresenceCluster bookId={bookId} surface="#000000" />}
+          <button className="reader-icon" onClick={() => setShowToc(true)} title="Contents">☰</button>
+        </div>
       </header>
 
       <main className="relative flex-1 min-h-0">

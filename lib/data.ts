@@ -7,6 +7,7 @@ import {
   type Book,
   type Chapter,
   type ChapterImage,
+  type PresenceEntry,
   type ReaderSettings,
   type ReadingProgress,
   type Role,
@@ -651,6 +652,131 @@ export async function getBookReadersProgress(
 
   rows.sort((a, b) => b.pct - a.pct || b.totalSeconds - a.totalSeconds);
   return rows;
+}
+
+// ============================================================
+// Presence (who's reading right now)
+// ============================================================
+
+/** A presence beat is "online" if it landed within this window and was active. */
+const PRESENCE_ONLINE_MS = 45_000;
+
+/** 1-based position of each published chapter within a book, in reading order. */
+async function chapterNumberMap(bookId: string): Promise<Map<string, number>> {
+  const { data } = await supabaseAdmin
+    .from("chapters")
+    .select("id")
+    .eq("book_id", bookId)
+    .eq("status", "published")
+    .order("position", { ascending: true });
+  const map = new Map<string, number>();
+  (data ?? []).forEach((c, i) => map.set(c.id as string, i + 1));
+  return map;
+}
+
+/**
+ * Upsert a reader's live location. Called on the reading-time flush, so presence
+ * rides the existing ~15s cadence rather than a separate heartbeat. Best-effort:
+ * a failure here (e.g. table missing before the migration runs) must never break
+ * reading-time tracking, so we log and move on rather than throw.
+ */
+export async function upsertPresence(input: {
+  userId: string;
+  bookId: string | null;
+  chapterId: string | null;
+  scrollFraction: number;
+  active: boolean;
+}): Promise<void> {
+  const frac = Math.min(1, Math.max(0, Number(input.scrollFraction) || 0));
+  const { error } = await supabaseAdmin.from("reader_presence").upsert({
+    user_id: input.userId,
+    book_id: input.bookId,
+    chapter_id: input.chapterId,
+    scroll_fraction: frac,
+    is_active: input.active,
+    last_beat_at: new Date().toISOString(),
+  });
+  if (error) console.error("upsertPresence failed:", error.message);
+}
+
+/**
+ * Readers who are actively reading right now — a fresh, active presence beat —
+ * excluding the viewer, admins, revoked accounts, and anyone who has opted out
+ * of sharing activity. When `viewerBookId` is given, `sameBook` flags readers in
+ * that same book (so the reader UI can ring them and show their chapter number).
+ * Same-book readers sort first, then alphabetically.
+ */
+export async function getOnlinePresence(
+  viewerId: string,
+  viewerBookId?: string | null
+): Promise<PresenceEntry[]> {
+  const cutoff = new Date(Date.now() - PRESENCE_ONLINE_MS).toISOString();
+  const { data: rows } = await supabaseAdmin
+    .from("reader_presence")
+    .select("user_id, book_id, chapter_id, is_active, last_beat_at")
+    .eq("is_active", true)
+    .gte("last_beat_at", cutoff);
+
+  const others = ((rows ?? []) as {
+    user_id: string;
+    book_id: string | null;
+    chapter_id: string | null;
+  }[]).filter((p) => p.user_id !== viewerId);
+  if (others.length === 0) return [];
+
+  const ids = others.map((p) => p.user_id);
+  const [{ data: users }, { data: settings }] = await Promise.all([
+    supabaseAdmin.from("users").select("id, name, role, revoked").in("id", ids),
+    supabaseAdmin.from("reader_settings").select("user_id, share_activity").in("user_id", ids),
+  ]);
+  const userById = new Map(
+    (users ?? []).map((u) => [
+      u.id as string,
+      u as { id: string; name: string; role: Role; revoked: boolean },
+    ])
+  );
+  const shareById = new Map(
+    (settings ?? []).map((s) => [
+      s.user_id as string,
+      (s as { share_activity: boolean | null }).share_activity,
+    ])
+  );
+
+  // Resolve book titles and per-book chapter numbering, once per distinct book.
+  const bookIds = Array.from(
+    new Set(others.map((p) => p.book_id).filter((b): b is string => !!b))
+  );
+  const titleById = new Map<string, string>();
+  const numberMaps = new Map<string, Map<string, number>>();
+  if (bookIds.length) {
+    const { data: books } = await supabaseAdmin
+      .from("books")
+      .select("id, title")
+      .in("id", bookIds);
+    (books ?? []).forEach((b) => titleById.set(b.id as string, b.title as string));
+    await Promise.all(
+      bookIds.map(async (bid) => numberMaps.set(bid, await chapterNumberMap(bid)))
+    );
+  }
+
+  const out: PresenceEntry[] = [];
+  for (const p of others) {
+    const u = userById.get(p.user_id);
+    if (!u || u.revoked || u.role !== "reader") continue; // readers only
+    if (shareById.get(p.user_id) === false) continue; // opted out
+    const chapterNumber =
+      p.book_id && p.chapter_id ? numberMaps.get(p.book_id)?.get(p.chapter_id) ?? null : null;
+    out.push({
+      userId: p.user_id,
+      name: u.name,
+      bookId: p.book_id,
+      bookTitle: p.book_id ? titleById.get(p.book_id) ?? null : null,
+      chapterNumber,
+      sameBook: !!viewerBookId && p.book_id === viewerBookId,
+    });
+  }
+  out.sort((a, b) => Number(b.sameBook) - Number(a.sameBook) || a.name.localeCompare(b.name));
+  return out;
 }
 
 /** Clear a single chapter's read mark for this reader (undo). */

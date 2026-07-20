@@ -7,6 +7,7 @@ import {
 } from "@/lib/data";
 import { formatDuration } from "@/lib/format";
 import ReaderNav from "@/components/ReaderNav";
+import OnlineNowStrip from "@/components/OnlineNowStrip";
 import Logo from "@/components/Logo";
 
 export default async function LibraryPage() {
@@ -33,6 +34,8 @@ export default async function LibraryPage() {
         <h1 className="text-2xl font-bold mb-6" style={{ fontFamily: "var(--font-serif)" }}>
           Your library
         </h1>
+
+        {user.role === "reader" && <OnlineNowStrip />}
 
         {visible.length === 0 ? (
           <div className="card p-10 text-center text-muted">

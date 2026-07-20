@@ -5,6 +5,7 @@ import Link from "next/link";
 import MarkdownView from "@/components/MarkdownView";
 import ChapterComments from "@/components/ChapterComments";
 import NavProgress from "@/components/NavProgress";
+import PresenceCluster from "@/components/PresenceCluster";
 import type { Layout } from "@/lib/types";
 
 interface NavChapter {
@@ -116,19 +117,36 @@ export default function ReaderView({
 
   // ---- reading-time tracking (active seconds) ----
   const activeSecondsRef = useRef(0);
-  const lastActiveRef = useRef(Date.now());
+  const lastActiveRef = useRef(0); // stamped to now() when the ticker effect mounts
 
+  // Flush accumulated reading time AND a presence beat in one request — presence
+  // rides this same ~15s cadence rather than a second heartbeat. Always posts
+  // (even with 0 seconds) so presence stays fresh; addReadingTime ignores a
+  // 0-second beat while upsertPresence treats it as a heartbeat. `activeOverride`
+  // lets the hide handlers force an inactive beat so the reader drops offline.
   const flushTime = useCallback(
-    (beacon = false) => {
+    (beacon = false, activeOverride?: boolean) => {
       const secs = activeSecondsRef.current;
-      if (secs <= 0) return;
       activeSecondsRef.current = 0;
-      postJSON("/api/reading-time", { bookId, seconds: secs }, beacon);
+      const active =
+        activeOverride ??
+        (document.visibilityState === "visible" &&
+          document.hasFocus() &&
+          Date.now() - lastActiveRef.current < IDLE_MS);
+      const el = scrollRef.current;
+      const max = el ? el.scrollHeight - el.clientHeight : 0;
+      const scrollFraction = el && max > 0 ? Math.min(1, Math.max(0, el.scrollTop / max)) : 0;
+      postJSON(
+        "/api/reading-time",
+        { bookId, seconds: secs, chapterId: chapter.id, scrollFraction, active },
+        beacon
+      );
     },
-    [bookId]
+    [bookId, chapter.id]
   );
 
   useEffect(() => {
+    lastActiveRef.current = Date.now();
     const bump = () => (lastActiveRef.current = Date.now());
     const events = ["mousemove", "mousedown", "keydown", "scroll", "touchstart", "wheel"];
     events.forEach((e) => window.addEventListener(e, bump, { passive: true }));
@@ -141,11 +159,15 @@ export default function ReaderView({
       if (active) activeSecondsRef.current += 1;
     }, 1000);
 
+    // Beat immediately so the reader shows up online on open (and on each
+    // chapter change, since flushTime changes with chapter.id).
+    flushTime(false);
     const flush = setInterval(() => flushTime(false), FLUSH_MS);
 
-    const onHide = () => flushTime(true);
+    // Force an inactive beat on hide so the reader drops offline promptly.
+    const onHide = () => flushTime(true, false);
     const onVis = () => {
-      if (document.visibilityState === "hidden") flushTime(true);
+      if (document.visibilityState === "hidden") flushTime(true, false);
     };
     window.addEventListener("pagehide", onHide);
     document.addEventListener("visibilitychange", onVis);
@@ -372,6 +394,7 @@ export default function ReaderView({
         </Link>
         <span className="opacity-60 truncate hidden sm:inline">/ {chapter.title}</span>
         <div className="ml-auto flex items-center gap-1 shrink-0">
+          {!isAdmin && <PresenceCluster bookId={bookId} surface={settings.bg_color} />}
           <button className="reader-icon" onClick={() => setShowToc(true)} title="Contents">
             ☰
           </button>

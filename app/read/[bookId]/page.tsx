@@ -70,7 +70,7 @@ export default async function BookTocPage({
           </div>
         </div>
 
-        <BookReadersProgress readers={readers} currentUserId={user.id} />
+        <BookReadersProgress readers={readers} currentUserId={user.id} bookId={bookId} />
 
         <h2 className="font-semibold text-sm text-muted uppercase tracking-wide mb-2">Chapters</h2>
         {chapters.length === 0 ? (
