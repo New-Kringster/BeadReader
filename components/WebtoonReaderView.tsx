@@ -237,7 +237,7 @@ export default function WebtoonReaderView({
         </Link>
         <span className="opacity-60 truncate hidden sm:inline">/ {chapter.title}</span>
         <div className="ml-auto flex items-center gap-2">
-          {!isAdmin && !adminPreview && <PresenceCluster bookId={bookId} surface="#000000" />}
+          {!isAdmin && !adminPreview && <PresenceCluster surface="#000000" />}
           <button className="reader-icon" onClick={() => setShowToc(true)} title="Contents">☰</button>
         </div>
       </header>

@@ -61,13 +61,19 @@ function SetCodeForm({ userId, onDone }: { userId: string; onDone: () => void })
   );
 }
 
+function initial(name: string): string {
+  return name.trim().charAt(0).toUpperCase() || "?";
+}
+
 export default function UsersTable({
   users,
   activity,
+  avatars,
   currentUserId,
 }: {
   users: User[];
   activity: Record<string, ActivityRow[]>;
+  avatars: Record<string, string>;
   currentUserId: string;
 }) {
   const [openActivity, setOpenActivity] = useState<string | null>(null);
@@ -87,6 +93,14 @@ export default function UsersTable({
         return (
           <div key={u.id} className={`card p-4 ${u.revoked ? "opacity-70" : ""}`}>
             <div className="flex flex-wrap items-center gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-accent/15 text-sm font-semibold text-accent">
+                {avatars[u.id] ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={avatars[u.id]} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  initial(u.name)
+                )}
+              </span>
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-semibold">{u.name}</span>

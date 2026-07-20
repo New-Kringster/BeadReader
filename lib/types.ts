@@ -80,12 +80,24 @@ export interface ReaderPresence {
 export interface PresenceEntry {
   userId: string;
   name: string;
+  /** Compressed data-URI avatar, or null when the reader hasn't set one. */
+  avatarUrl: string | null;
   bookId: string | null;
   bookTitle: string | null;
   /** 1-based chapter number in book order, or null if unknown/browsing. */
   chapterNumber: number | null;
   /** True when this reader is in the same book as the viewer. */
   sameBook: boolean;
+}
+
+export type NudgeKind = "bump" | "text";
+
+/** A nudge delivered to the viewer, for the ephemeral toast. Client-safe. */
+export interface IncomingNudge {
+  id: string;
+  fromName: string;
+  kind: NudgeKind;
+  body: string | null;
 }
 
 export interface ReadingProgress {

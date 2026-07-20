@@ -1,18 +1,20 @@
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
-import { getSettings } from "@/lib/data";
+import { getSettings, getAvatar } from "@/lib/data";
 import { formatDuration } from "@/lib/format";
 import ReaderNav from "@/components/ReaderNav";
 import ChangeCodeCard from "@/components/ChangeCodeCard";
 import ShareActivityToggle from "@/components/ShareActivityToggle";
+import AvatarUpload from "@/components/AvatarUpload";
 
 export default async function AccountPage() {
   const user = (await getCurrentUser())!;
 
-  const [{ data: times }, settings] = await Promise.all([
+  const [{ data: times }, settings, avatar] = await Promise.all([
     supabaseAdmin.from("reading_time").select("total_seconds").eq("user_id", user.id),
     getSettings(user.id),
+    getAvatar(user.id),
   ]);
   const totalSeconds = (times ?? []).reduce((s, t) => s + (t.total_seconds ?? 0), 0);
 
@@ -25,6 +27,8 @@ export default async function AccountPage() {
         </h1>
 
         <div className="card p-6 space-y-4 max-w-md">
+          <AvatarUpload name={user.name} initialAvatar={avatar} />
+
           <div>
             <div className="label">Name</div>
             <div className="font-medium">{user.name}</div>

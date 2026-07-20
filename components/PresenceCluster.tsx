@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { usePresence } from "@/components/usePresence";
+import { usePresence } from "@/components/PresenceProvider";
 import type { PresenceEntry } from "@/lib/types";
 
 const ONLINE = "#22c55e"; // emerald — reads on light and dark reader backgrounds
@@ -13,7 +13,7 @@ function Avatar({ reader, surface }: { reader: PresenceEntry; surface: string })
   const ring = reader.sameBook ? { boxShadow: `0 0 0 2px ${ONLINE}` } : undefined;
   return (
     <span
-      className="relative inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold"
+      className="relative inline-flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full text-xs font-semibold"
       style={{ backgroundColor: "color-mix(in oklab, currentColor 16%, transparent)", ...ring }}
       title={
         reader.bookTitle
@@ -23,9 +23,13 @@ function Avatar({ reader, surface }: { reader: PresenceEntry; surface: string })
           : `${reader.name} — online`
       }
     >
-      {initial(reader.name)}
+      {reader.avatarUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={reader.avatarUrl} alt="" className="h-full w-full object-cover" />
+      ) : (
+        initial(reader.name)
+      )}
       {reader.sameBook && reader.chapterNumber ? (
-        // Same book as you: chapter-number status dot beside the icon.
         <span
           className="absolute -bottom-1 -right-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none text-white"
           style={{ backgroundColor: ONLINE, boxShadow: `0 0 0 2px ${surface}` }}
@@ -33,7 +37,6 @@ function Avatar({ reader, surface }: { reader: PresenceEntry; surface: string })
           {reader.chapterNumber}
         </span>
       ) : (
-        // Online, elsewhere: a plain green dot.
         <span
           className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full"
           style={{ backgroundColor: ONLINE, boxShadow: `0 0 0 2px ${surface}` }}
@@ -43,25 +46,118 @@ function Avatar({ reader, surface }: { reader: PresenceEntry; surface: string })
   );
 }
 
+function ReaderRow({ reader, surface }: { reader: PresenceEntry; surface: string }) {
+  const [showText, setShowText] = useState(false);
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+
+  const send = async (kind: "bump" | "text") => {
+    setBusy(true);
+    setNote(null);
+    try {
+      const res = await fetch("/api/nudge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          toUserId: reader.userId,
+          kind,
+          body: kind === "text" ? text : undefined,
+        }),
+      });
+      if (res.ok) {
+        setNote(kind === "bump" ? "Bumped ✓" : "Sent ✓");
+        setText("");
+        setShowText(false);
+      } else {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        setNote(j.error ?? "Couldn't send.");
+      }
+    } catch {
+      setNote("Couldn't send.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <li className="rounded px-2 py-1.5">
+      <div className="flex items-center gap-2.5">
+        <Avatar reader={reader} surface={surface} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-medium">{reader.name}</span>
+          <span className="block truncate text-xs opacity-60">
+            {reader.bookTitle
+              ? `${reader.sameBook ? "Reading here" : reader.bookTitle}${
+                  reader.chapterNumber ? ` · ch ${reader.chapterNumber}` : ""
+                }`
+              : "Browsing"}
+          </span>
+        </span>
+        <button
+          type="button"
+          className="reader-icon shrink-0"
+          title="Bump"
+          disabled={busy}
+          onClick={() => send("bump")}
+        >
+          👋
+        </button>
+        <button
+          type="button"
+          className="reader-icon shrink-0"
+          title="Quick message"
+          aria-pressed={showText}
+          onClick={() => {
+            setShowText((v) => !v);
+            setNote(null);
+          }}
+        >
+          💬
+        </button>
+      </div>
+
+      {showText && (
+        <div className="mt-1.5 flex items-center gap-1.5">
+          <input
+            autoFocus
+            value={text}
+            maxLength={140}
+            placeholder="Say something…"
+            className="min-w-0 flex-1 rounded border bg-transparent px-2 py-1 text-sm outline-none"
+            style={{ borderColor: "color-mix(in oklab, currentColor 25%, transparent)" }}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && text.trim() && !busy) send("text");
+            }}
+          />
+          <button
+            type="button"
+            className="reader-icon shrink-0"
+            title="Send"
+            disabled={busy || !text.trim()}
+            onClick={() => send("text")}
+          >
+            ➤
+          </button>
+        </div>
+      )}
+      {note && <p className="mt-1 px-0.5 text-xs opacity-70">{note}</p>}
+    </li>
+  );
+}
+
 /**
  * Reader top-bar cluster of readers online right now. A green dot marks online;
  * readers in the *same* book get a green ring and a chapter-number status dot.
- * Tapping opens a popover showing what each person is reading. Renders nothing
- * when nobody else is online, so it stays out of the way.
+ * Tapping opens a popover showing what each person is reading, with a bump and a
+ * quick ephemeral text. Renders nothing when nobody else is online.
  *
  * `surface` is the reader's background colour, used to punch the status dots out
  * cleanly against whatever theme the reader has chosen.
  */
-export default function PresenceCluster({
-  bookId,
-  surface,
-  initial: initialData = [],
-}: {
-  bookId: string;
-  surface: string;
-  initial?: PresenceEntry[];
-}) {
-  const online = usePresence(bookId, initialData);
+export default function PresenceCluster({ surface }: { surface: string }) {
+  const online = usePresence();
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
@@ -103,7 +199,7 @@ export default function PresenceCluster({
 
       {open && (
         <div
-          className="absolute right-0 top-full z-30 mt-2 w-64 rounded-lg border p-1.5 text-sm shadow-lg"
+          className="absolute right-0 top-full z-30 mt-2 w-72 rounded-lg border p-1.5 text-sm shadow-lg"
           style={{
             backgroundColor: surface,
             borderColor: "color-mix(in oklab, currentColor 18%, transparent)",
@@ -114,19 +210,7 @@ export default function PresenceCluster({
           </p>
           <ul>
             {online.map((r) => (
-              <li key={r.userId} className="flex items-center gap-2.5 rounded px-2 py-1.5">
-                <Avatar reader={r} surface={surface} />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium">{r.name}</span>
-                  <span className="block truncate text-xs opacity-60">
-                    {r.bookTitle
-                      ? `${r.sameBook ? "Reading here" : r.bookTitle}${
-                          r.chapterNumber ? ` · ch ${r.chapterNumber}` : ""
-                        }`
-                      : "Browsing"}
-                  </span>
-                </span>
-              </li>
+              <ReaderRow key={r.userId} reader={r} surface={surface} />
             ))}
           </ul>
         </div>

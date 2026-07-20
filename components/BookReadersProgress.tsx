@@ -1,6 +1,6 @@
 "use client";
 import type { ReaderBookProgress } from "@/lib/data";
-import { usePresence } from "@/components/usePresence";
+import { usePresence } from "@/components/PresenceProvider";
 
 /** "2h 15m", "43m", "<1m" — total time spent reading. */
 function formatDuration(secs: number): string {
@@ -18,14 +18,13 @@ function initial(name: string): string {
 export default function BookReadersProgress({
   readers,
   currentUserId,
-  bookId,
 }: {
   readers: ReaderBookProgress[];
   currentUserId: string;
-  bookId: string;
 }) {
-  // Live presence for this book: readers online here right now get a green dot.
-  const online = usePresence(bookId);
+  // Live presence for this book (the provider knows the book from the route):
+  // readers online here right now get a green dot.
+  const online = usePresence();
   const onlineHere = new Set(online.filter((r) => r.sameBook).map((r) => r.userId));
 
   if (readers.length === 0) return null;
@@ -43,9 +42,14 @@ export default function BookReadersProgress({
             <li key={r.userId} className="flex items-center gap-3 px-4 py-3">
               <span
                 aria-hidden
-                className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent/15 text-sm font-semibold text-accent"
+                className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-accent/15 text-sm font-semibold text-accent"
               >
-                {initial(r.name)}
+                {r.avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={r.avatarUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  initial(r.name)
+                )}
                 {isOnline && (
                   <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-panel" />
                 )}

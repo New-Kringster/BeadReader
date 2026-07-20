@@ -1,14 +1,18 @@
 import { requireAdmin } from "@/lib/auth";
-import { listAllUsers, getReaderActivity } from "@/lib/data";
+import { listAllUsers, getReaderActivity, getAvatars } from "@/lib/data";
 import AddUserForm from "@/components/AddUserForm";
 import UsersTable, { type ActivityRow } from "@/components/UsersTable";
 
 export default async function PeoplePage() {
   const me = await requireAdmin();
   const users = await listAllUsers();
-  const activityLists = await Promise.all(users.map((u) => getReaderActivity(u.id)));
+  const [activityLists, avatarMap] = await Promise.all([
+    Promise.all(users.map((u) => getReaderActivity(u.id))),
+    getAvatars(users.map((u) => u.id)),
+  ]);
   const activity: Record<string, ActivityRow[]> = {};
   users.forEach((u, i) => (activity[u.id] = activityLists[i]));
+  const avatars: Record<string, string> = Object.fromEntries(avatarMap);
 
   return (
     <div className="space-y-8">
@@ -25,7 +29,7 @@ export default async function PeoplePage() {
         <AddUserForm />
       </section>
 
-      <UsersTable users={users} activity={activity} currentUserId={me.id} />
+      <UsersTable users={users} activity={activity} avatars={avatars} currentUserId={me.id} />
     </div>
   );
 }

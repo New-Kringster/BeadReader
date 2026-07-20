@@ -1,14 +1,14 @@
 "use client";
-import { usePresence } from "@/components/usePresence";
+import { usePresence } from "@/components/PresenceProvider";
 
 function initial(name: string): string {
   return name.trim().charAt(0).toUpperCase() || "?";
 }
 
 /**
- * Library strip of readers online right now, with what they're reading. Polls
- * presence and renders nothing when nobody else is online, so it only appears
- * when there's something to see.
+ * Library strip of readers online right now, with what they're reading. Reads
+ * live presence from the provider and renders nothing when nobody else is
+ * online, so it only appears when there's something to see.
  */
 export default function OnlineNowStrip() {
   const online = usePresence();
@@ -23,8 +23,13 @@ export default function OnlineNowStrip() {
             key={r.userId}
             className="flex items-center gap-2 rounded-full border border-line bg-panel py-1 pl-1 pr-3"
           >
-            <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent/15 text-xs font-semibold text-accent">
-              {initial(r.name)}
+            <span className="relative flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-accent/15 text-xs font-semibold text-accent">
+              {r.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={r.avatarUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                initial(r.name)
+              )}
               <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-panel" />
             </span>
             <span className="min-w-0">

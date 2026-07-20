@@ -394,7 +394,7 @@ export default function ReaderView({
         </Link>
         <span className="opacity-60 truncate hidden sm:inline">/ {chapter.title}</span>
         <div className="ml-auto flex items-center gap-1 shrink-0">
-          {!isAdmin && <PresenceCluster bookId={bookId} surface={settings.bg_color} />}
+          {!isAdmin && <PresenceCluster surface={settings.bg_color} />}
           <button className="reader-icon" onClick={() => setShowToc(true)} title="Contents">
             ☰
           </button>

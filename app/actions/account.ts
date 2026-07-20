@@ -2,7 +2,13 @@
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
 import { validateAccessCode } from "@/lib/codes";
-import { setCustomAccessCode, regenerateCode, saveSettings } from "@/lib/data";
+import {
+  setCustomAccessCode,
+  regenerateCode,
+  saveSettings,
+  setAvatar,
+  deleteAvatar,
+} from "@/lib/data";
 
 export type CodeState = { error?: string; success?: string };
 
@@ -11,6 +17,33 @@ export async function setShareActivityAction(on: boolean): Promise<void> {
   const user = await getCurrentUser();
   if (!user) return;
   await saveSettings(user.id, { share_activity: on });
+  revalidatePath("/read/account");
+}
+
+// Avatars are compressed client-side to a small square; this is the size ceiling
+// the server enforces on the resulting data URI (a generous ~64KB of base64).
+const MAX_AVATAR_CHARS = 90_000;
+
+/** Save the signed-in user's compressed profile photo (a data URI). */
+export async function setAvatarAction(dataUri: string): Promise<{ error?: string }> {
+  const user = await getCurrentUser();
+  if (!user) return { error: "You're not signed in." };
+  if (!/^data:image\/(png|jpeg|webp);base64,/.test(dataUri)) {
+    return { error: "That doesn't look like an image." };
+  }
+  if (dataUri.length > MAX_AVATAR_CHARS) {
+    return { error: "Image is too large even after compression — try a smaller one." };
+  }
+  await setAvatar(user.id, dataUri);
+  revalidatePath("/read/account");
+  return {};
+}
+
+/** Remove the signed-in user's profile photo. */
+export async function removeAvatarAction(): Promise<void> {
+  const user = await getCurrentUser();
+  if (!user) return;
+  await deleteAvatar(user.id);
   revalidatePath("/read/account");
 }
 

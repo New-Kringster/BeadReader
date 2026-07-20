@@ -7,6 +7,8 @@ import {
   type Book,
   type Chapter,
   type ChapterImage,
+  type IncomingNudge,
+  type NudgeKind,
   type PresenceEntry,
   type ReaderSettings,
   type ReadingProgress,
@@ -577,6 +579,7 @@ export async function listReadChapterIds(userId: string, bookId: string): Promis
 export interface ReaderBookProgress {
   userId: string;
   name: string;
+  avatarUrl: string | null;
   readCount: number;
   total: number;
   pct: number;
@@ -632,6 +635,8 @@ export async function getBookReadersProgress(
     (times ?? []).map((t) => [t.user_id as string, (t.total_seconds as number) ?? 0])
   );
 
+  const avatars = await getAvatars(((users ?? []) as { id: string }[]).map((u) => u.id));
+
   const rows: ReaderBookProgress[] = [];
   for (const u of (users ?? []) as { id: string; name: string }[]) {
     const readCount = readsByUser.get(u.id)?.size ?? 0;
@@ -642,6 +647,7 @@ export async function getBookReadersProgress(
     rows.push({
       userId: u.id,
       name: u.name,
+      avatarUrl: avatars.get(u.id) ?? null,
       readCount,
       total,
       pct: Math.min(100, Math.round((readCount / total) * 100)),
@@ -652,6 +658,42 @@ export async function getBookReadersProgress(
 
   rows.sort((a, b) => b.pct - a.pct || b.totalSeconds - a.totalSeconds);
   return rows;
+}
+
+// ============================================================
+// Avatars (compressed profile photos, stored as data URIs)
+// ============================================================
+
+/** Data-URI avatars for a set of users, keyed by user id (missing = no avatar). */
+export async function getAvatars(userIds: string[]): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  if (userIds.length === 0) return map;
+  const { data } = await supabaseAdmin
+    .from("user_avatars")
+    .select("user_id, data_uri")
+    .in("user_id", userIds);
+  for (const row of data ?? []) map.set(row.user_id as string, row.data_uri as string);
+  return map;
+}
+
+export async function getAvatar(userId: string): Promise<string | null> {
+  const { data } = await supabaseAdmin
+    .from("user_avatars")
+    .select("data_uri")
+    .eq("user_id", userId)
+    .maybeSingle();
+  return (data?.data_uri as string) ?? null;
+}
+
+export async function setAvatar(userId: string, dataUri: string): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from("user_avatars")
+    .upsert({ user_id: userId, data_uri: dataUri, updated_at: new Date().toISOString() });
+  if (error) throw new Error(`Could not save avatar: ${error.message}`);
+}
+
+export async function deleteAvatar(userId: string): Promise<void> {
+  await supabaseAdmin.from("user_avatars").delete().eq("user_id", userId);
 }
 
 // ============================================================
@@ -725,9 +767,10 @@ export async function getOnlinePresence(
   if (others.length === 0) return [];
 
   const ids = others.map((p) => p.user_id);
-  const [{ data: users }, { data: settings }] = await Promise.all([
+  const [{ data: users }, { data: settings }, avatars] = await Promise.all([
     supabaseAdmin.from("users").select("id, name, role, revoked").in("id", ids),
     supabaseAdmin.from("reader_settings").select("user_id, share_activity").in("user_id", ids),
+    getAvatars(ids),
   ]);
   const userById = new Map(
     (users ?? []).map((u) => [
@@ -769,6 +812,7 @@ export async function getOnlinePresence(
     out.push({
       userId: p.user_id,
       name: u.name,
+      avatarUrl: avatars.get(p.user_id) ?? null,
       bookId: p.book_id,
       bookTitle: p.book_id ? titleById.get(p.book_id) ?? null : null,
       chapterNumber,
@@ -777,6 +821,96 @@ export async function getOnlinePresence(
   }
   out.sort((a, b) => Number(b.sameBook) - Number(a.sameBook) || a.name.localeCompare(b.name));
   return out;
+}
+
+// ============================================================
+// Nudges (ephemeral bump / quick-text)
+// ============================================================
+
+const NUDGE_MAX_BODY = 140;
+const NUDGE_MIN_INTERVAL_MS = 3_000; // per sender→recipient, anti-spam
+const NUDGE_TTL_MS = 120_000; // undelivered nudges expire after this
+
+/** Send a bump or short text to another reader. Nothing is stored long-term. */
+export async function sendNudge(
+  fromUserId: string,
+  toUserId: string,
+  kind: NudgeKind,
+  body: string | null
+): Promise<{ ok: boolean; error?: string }> {
+  if (fromUserId === toUserId) return { ok: false, error: "You can't nudge yourself." };
+  const text = kind === "text" ? (body ?? "").replace(/\s+/g, " ").trim().slice(0, NUDGE_MAX_BODY) : null;
+  if (kind === "text" && !text) return { ok: false, error: "Say something first." };
+
+  // Recipient must be a real, non-revoked reader who shares activity.
+  const [{ data: recipient }, { data: setting }] = await Promise.all([
+    supabaseAdmin.from("users").select("role, revoked").eq("id", toUserId).maybeSingle(),
+    supabaseAdmin.from("reader_settings").select("share_activity").eq("user_id", toUserId).maybeSingle(),
+  ]);
+  if (!recipient || recipient.revoked || recipient.role !== "reader") {
+    return { ok: false, error: "That reader isn't available." };
+  }
+  if (setting && setting.share_activity === false) {
+    return { ok: false, error: "That reader isn't available." };
+  }
+
+  // Rate limit: one nudge per few seconds per sender→recipient.
+  const since = new Date(Date.now() - NUDGE_MIN_INTERVAL_MS).toISOString();
+  const { count } = await supabaseAdmin
+    .from("reader_nudges")
+    .select("id", { count: "exact", head: true })
+    .eq("from_user_id", fromUserId)
+    .eq("to_user_id", toUserId)
+    .gte("created_at", since);
+  if ((count ?? 0) > 0) return { ok: false, error: "Slow down a moment." };
+
+  const { error } = await supabaseAdmin
+    .from("reader_nudges")
+    .insert({ from_user_id: fromUserId, to_user_id: toUserId, kind, body: text });
+  if (error) return { ok: false, error: "Could not send." };
+  return { ok: true };
+}
+
+/**
+ * Return the pending nudges for a reader and delete them in the same call —
+ * delivered nudges are not retained. Also sweeps anything undelivered past its
+ * TTL so the table only ever holds a few seconds of in-flight nudges.
+ */
+export async function takePendingNudges(userId: string): Promise<IncomingNudge[]> {
+  await supabaseAdmin
+    .from("reader_nudges")
+    .delete()
+    .lt("created_at", new Date(Date.now() - NUDGE_TTL_MS).toISOString());
+
+  const { data } = await supabaseAdmin
+    .from("reader_nudges")
+    .select("id, from_user_id, kind, body")
+    .eq("to_user_id", userId)
+    .order("created_at", { ascending: true });
+  const rows = (data ?? []) as {
+    id: string;
+    from_user_id: string;
+    kind: NudgeKind;
+    body: string | null;
+  }[];
+  if (rows.length === 0) return [];
+
+  const fromIds = Array.from(new Set(rows.map((r) => r.from_user_id)));
+  const { data: users } = await supabaseAdmin.from("users").select("id, name").in("id", fromIds);
+  const nameById = new Map((users ?? []).map((u) => [u.id as string, u.name as string]));
+
+  // Delete-on-deliver: remove exactly the rows we're handing back.
+  await supabaseAdmin
+    .from("reader_nudges")
+    .delete()
+    .in("id", rows.map((r) => r.id));
+
+  return rows.map((r) => ({
+    id: r.id,
+    fromName: nameById.get(r.from_user_id) ?? "Someone",
+    kind: r.kind,
+    body: r.body,
+  }));
 }
 
 /** Clear a single chapter's read mark for this reader (undo). */
