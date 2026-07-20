@@ -14,6 +14,7 @@ export default function ChapterEditor({
 }) {
   const [title, setTitle] = useState(chapter?.title ?? "");
   const [content, setContent] = useState(chapter?.content ?? "");
+  const [recap, setRecap] = useState(chapter?.recap ?? "");
   const [status, setStatus] = useState(chapter?.status ?? "draft");
   const [spicy, setSpicy] = useState(chapter?.is_explicit ?? false);
   const [tab, setTab] = useState<"write" | "preview">("write");
@@ -179,6 +180,46 @@ export default function ChapterEditor({
             ) : (
               <p className="text-muted text-sm">Nothing to preview yet.</p>
             )}
+          </div>
+        </div>
+      </div>
+
+      {/* Chapter recap — a short Markdown summary shown to readers in a
+          collapsible panel at the end of the chapter (default collapsed). */}
+      <div className="card p-4 space-y-3">
+        <div>
+          <div className="label mb-0">Recap</div>
+          <p className="text-sm text-muted">
+            An optional short summary of this chapter, in Markdown. Readers see it in a
+            collapsible <strong>Recap</strong> panel at the end of the chapter — collapsed by
+            default. Leave it blank for no recap.
+          </p>
+        </div>
+        <div className="grid md:grid-cols-2 gap-4">
+          <div>
+            <div className="label">Markdown</div>
+            <textarea
+              name="recap"
+              value={recap}
+              onChange={(e) => setRecap(e.target.value)}
+              spellCheck
+              className="field font-mono text-sm leading-relaxed"
+              style={{ minHeight: "10rem", resize: "vertical", fontFamily: "ui-monospace, Menlo, monospace" }}
+              placeholder="Summarize this chapter in a paragraph…"
+            />
+          </div>
+          <div>
+            <div className="label">Preview</div>
+            <div
+              className="card p-5 overflow-auto"
+              style={{ minHeight: "10rem", maxHeight: "24rem", fontFamily: "var(--font-serif)" }}
+            >
+              {recap.trim() ? (
+                <MarkdownView source={recap} />
+              ) : (
+                <p className="text-muted text-sm">No recap yet.</p>
+              )}
+            </div>
           </div>
         </div>
       </div>

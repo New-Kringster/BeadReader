@@ -48,6 +48,9 @@ export interface Chapter {
   title: string;
   position: number;
   content: string;
+  /** Optional short summary of the chapter (Markdown), shown in a collapsible
+   *  "Recap" panel at the end of the chapter. Empty string when unset. */
+  recap: string;
   status: PublishStatus;
   is_explicit: boolean;
   created_at: string;

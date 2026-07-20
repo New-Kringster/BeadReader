@@ -85,7 +85,7 @@ export default async function ReadingPage({
     <ReaderView
       bookId={bookId}
       bookTitle={book.title}
-      chapter={{ id: current.id, title: current.title, content: current.content }}
+      chapter={{ id: current.id, title: current.title, content: current.content, recap: current.recap }}
       prev={prev ? { id: prev.id, title: prev.title } : null}
       next={next ? { id: next.id, title: next.title } : null}
       index={index + 1}

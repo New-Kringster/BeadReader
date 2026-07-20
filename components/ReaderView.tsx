@@ -63,7 +63,7 @@ export default function ReaderView({
 }: {
   bookId: string;
   bookTitle: string;
-  chapter: { id: string; title: string; content: string };
+  chapter: { id: string; title: string; content: string; recap: string };
   prev: NavChapter | null;
   next: NavChapter | null;
   index: number;
@@ -461,6 +461,7 @@ export default function ReaderView({
             >
               <h1 style={{ marginTop: 0 }}>{chapter.title}</h1>
               <MarkdownView source={chapter.content} />
+              <RecapPanel recap={chapter.recap} onClick={(e) => e.stopPropagation()} />
               <div className="mt-12 pt-6 border-t" style={{ borderColor: "color-mix(in oklab, currentColor 18%, transparent)" }}>
                 {next ? (
                   <button
@@ -522,6 +523,7 @@ export default function ReaderView({
               >
                 <h1 style={{ marginTop: 0 }}>{chapter.title}</h1>
                 <MarkdownView source={chapter.content} />
+                <RecapPanel recap={chapter.recap} />
               </div>
             </div>
           </div>
@@ -729,6 +731,40 @@ export default function ReaderView({
         </Drawer>
       )}
     </div>
+  );
+}
+
+/** Collapsible chapter recap shown at the end of the chapter (collapsed by
+ *  default). Renders nothing when there's no recap. Uses a native <details> so
+ *  it works without any extra state and inherits the reader's theme colours. */
+function RecapPanel({
+  recap,
+  onClick,
+}: {
+  recap: string;
+  onClick?: (e: React.MouseEvent) => void;
+}) {
+  if (!recap.trim()) return null;
+  const line = "color-mix(in oklab, currentColor 18%, transparent)";
+  return (
+    <details
+      className="reader-recap mt-10 pt-2 rounded-lg border"
+      style={{ borderColor: line }}
+      onClick={onClick}
+    >
+      <summary
+        className="cursor-pointer select-none list-none px-4 py-3 text-sm font-semibold opacity-80 flex items-center gap-2"
+        style={{ fontFamily: "var(--font-sans, inherit)" }}
+      >
+        <span aria-hidden>📝</span> Chapter recap
+      </summary>
+      <div
+        className="px-4 pb-4 pt-1 border-t"
+        style={{ borderColor: line, fontSize: "0.92em", opacity: 0.92 }}
+      >
+        <MarkdownView source={recap} />
+      </div>
+    </details>
   );
 }
 

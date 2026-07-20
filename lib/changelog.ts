@@ -28,6 +28,19 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.2.0",
+    date: "2026-07-20",
+    title: "Chapter recaps",
+    intro: "A quick refresher for every chapter, right where you finish it.",
+    items: [
+      {
+        title: "Recap at the end of each chapter",
+        body: "Chapters can now carry a short recap — a paragraph summarizing what happened. It appears in a tidy “Chapter recap” panel at the very end of the chapter, collapsed by default, so it never gets in the way. Tap it open whenever you need a memory jog before moving on (or after a break between reading sessions).",
+        how: "Read to the end of a chapter and tap “📝 Chapter recap” to expand it. Admins fill in the recap box (Markdown) in the chapter editor.",
+      },
+    ],
+  },
+  {
     version: "1.1.0",
     date: "2026-07-20",
     title: "Reading together — with stats and speed",
