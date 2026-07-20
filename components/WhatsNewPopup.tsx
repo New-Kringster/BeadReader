@@ -66,8 +66,8 @@ export default function WhatsNewPopup() {
               <h3 className="text-sm font-semibold">{item.title}</h3>
               <p className="mt-1 text-sm text-muted">{item.body}</p>
               {item.how && (
-                <p className="mt-1.5 text-sm text-accent">
-                  <span className="font-medium">How:</span> {item.how}
+                <p className="mt-2 rounded-md bg-accent/10 px-2.5 py-1.5 text-sm text-accent">
+                  <span className="font-semibold">How to use:</span> {item.how}
                 </p>
               )}
               {(item.image || item.art) && (
