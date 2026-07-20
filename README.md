@@ -105,6 +105,29 @@ adding books and readers. That's the entire setup.
 
 ---
 
+## Screenshots
+
+**Presence in the reader** — a green dot means someone's online; a green ring + number
+means they're in the *same* book, on that chapter.
+
+![Reader presence](public/changelog/presence-reader.png)
+
+**See who's online in the library**, and what they're reading.
+
+![Online now in the library](public/changelog/online.png)
+
+**Bump a friend or send a quick note** from the reader menu — the message pops up on their
+screen for a few seconds and then disappears; nothing is saved.
+
+![Bump & quick message](public/changelog/reader-menu.png)
+
+**A shared reading-stats dashboard** — total time, streaks, time per chapter, and a
+"when do you read" chart you can scroll through day by day.
+
+![Reading stats](public/changelog/stats.png)
+
+---
+
 ## How the pieces fit
 
 | Concern | Where |
