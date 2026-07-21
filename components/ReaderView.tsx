@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import MarkdownView from "@/components/MarkdownView";
@@ -96,7 +96,7 @@ export default function ReaderView({
     Math.round(Math.min(1, Math.max(0, initialScrollFraction)) * 100)
   );
 
-  const readSet = new Set(readIds);
+  const readSet = useMemo(() => new Set(readIds), [readIds]);
 
   // Page mode
   const [page, setPage] = useState(initialPage);

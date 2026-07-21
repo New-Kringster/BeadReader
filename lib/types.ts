@@ -69,16 +69,6 @@ export interface ReaderSettings {
   updated_at: string;
 }
 
-/** A reader's live location, upserted on the reading-time flush. */
-export interface ReaderPresence {
-  user_id: string;
-  book_id: string | null;
-  chapter_id: string | null;
-  scroll_fraction: number;
-  is_active: boolean;
-  last_beat_at: string;
-}
-
 /** A reader who is online right now, resolved for display. Client-safe. */
 export interface PresenceEntry {
   userId: string;

@@ -991,12 +991,15 @@ export async function getReadingTime(userId: string, bookId: string): Promise<nu
 export async function resolveResumeChapter(
   user: SpicyUser,
   bookId: string,
-  userId: string
+  userId: string,
+  prefetched?: { chapters: ReadableChapter[]; progress: ReadingProgress | null }
 ): Promise<{ chapterId: string; title: string; resuming: boolean } | null> {
-  const chapters = await listReadableChapters(bookId, user);
+  // The contents page already has both of these in hand; pass them in to avoid
+  // re-querying (and re-redacting) the chapter list a second time per request.
+  const chapters = prefetched?.chapters ?? (await listReadableChapters(bookId, user));
   if (chapters.length === 0) return null;
 
-  const progress = await getProgress(userId, bookId);
+  const progress = prefetched ? prefetched.progress : await getProgress(userId, bookId);
   const last =
     progress?.chapter_id && chapters.find((c) => c.id === progress.chapter_id);
   const target = last || chapters[0];
@@ -1400,9 +1403,12 @@ export interface BookCommentRow extends CommentRow {
  */
 export async function listBookComments(
   bookId: string,
-  user: SpicyUser
+  user: SpicyUser,
+  prefetchedChapters?: ReadableChapter[]
 ): Promise<BookCommentRow[]> {
-  const chapters = await listReadableChapters(bookId, user);
+  // Reuse the caller's already-fetched (and already-redacted) chapter list when
+  // provided, rather than running the gated query again just for the comment feed.
+  const chapters = prefetchedChapters ?? (await listReadableChapters(bookId, user));
   if (chapters.length === 0) return [];
 
   // Number chapters by their position in the reader's contents list (matching
