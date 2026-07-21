@@ -234,6 +234,7 @@ export async function createChapter(bookId: string, fields: Partial<Chapter>): P
       book_id: bookId,
       title: fields.title ?? "Untitled chapter",
       content: fields.content ?? "",
+      recap: fields.recap ?? "",
       status: fields.status ?? "draft",
       is_explicit: fields.is_explicit ?? false,
       position: fields.position ?? (await nextPosition(bookId)),

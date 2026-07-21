@@ -18,6 +18,7 @@ function readChapterFields(formData: FormData) {
   return {
     title: String(formData.get("title") ?? "").trim() || "Untitled chapter",
     content: String(formData.get("content") ?? ""),
+    recap: String(formData.get("recap") ?? ""),
     is_explicit: formData.get("is_explicit") === "on" || formData.get("is_explicit") === "true",
     status: (formData.get("status") === "published" ? "published" : "draft") as PublishStatus,
   };
