@@ -26,14 +26,16 @@ export default async function BookTocPage({
   const book = await getPublishedBook(bookId);
   if (!book) notFound();
 
+  // Fetch (and redact) the readable chapter list once, then reuse it for the
+  // resume target and the comment feed instead of querying it three times.
   const chapters = await listReadableChapters(bookId, user);
-  const [progress, resume, readIds, comments, readers] = await Promise.all([
+  const [progress, readIds, comments, readers] = await Promise.all([
     getProgress(user.id, bookId),
-    resolveResumeChapter(user, bookId, user.id),
     listReadChapterIds(user.id, bookId),
-    listBookComments(bookId, user),
+    listBookComments(bookId, user, chapters),
     getBookReadersProgress(bookId),
   ]);
+  const resume = await resolveResumeChapter(user, bookId, user.id, { chapters, progress });
 
   // Read chapters are tracked per-chapter (any chapter the reader has opened),
   // so out-of-order reading is reflected too. The single stored position marks

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { SPICY_REDACTED, SPICY_REVEAL_OPEN, SPICY_PREVIEW_OPEN } from "@/lib/redact";
@@ -25,9 +25,8 @@ const spicyBlockPattern = () =>
  * the source unless you add rehype-raw, so admin-authored Markdown is safe by
  * default. GFM adds tables, strikethrough, task lists, autolinks.
  *
- * A paragraph that is only the `[[spicy-redacted]]` sentinel (inserted server-side
- * by redactSpicy for readers without explicit access) is rendered as a labeled
- * redaction block instead of literal text.
+ * A paragraph that is only the `[[spicy-redacted]]` sentinel is rendered as a
+ * labeled redaction block instead of literal text (a defensive fallback).
  */
 function Markdown({ source }: { source: string }) {
   return (
@@ -65,7 +64,11 @@ function Markdown({ source }: { source: string }) {
  * [[/spicy-preview]]` excerpt, rendered blurred inside a `SpicyPreview` note that
  * can't be opened.
  */
-export default function MarkdownView({ source }: { source: string }) {
+// Memoized: the reader re-renders on every scroll tick, chrome toggle and
+// font-size change, but the parsed body only depends on `source`. Without this,
+// each of those re-renders would re-parse the entire chapter through
+// react-markdown — expensive on long chapters.
+function MarkdownView({ source }: { source: string }) {
   const text = source || "";
 
   // Fast path: no spicy blocks — render the whole body in one pass.
@@ -103,3 +106,5 @@ export default function MarkdownView({ source }: { source: string }) {
 
   return <div className="reader-content">{parts}</div>;
 }
+
+export default memo(MarkdownView);

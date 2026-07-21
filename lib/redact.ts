@@ -23,7 +23,8 @@
 /** Which view of the spicy spans a given reader receives. */
 export type SpicyView = "full" | "preview" | "clean";
 
-/** The placeholder a fully-redacted span is replaced with (kept for reference). */
+/** Sentinel for a fully-redacted span. No code path emits it today; MarkdownView
+ *  still renders it as a hidden-content block as a defensive fallback. */
 export const SPICY_REDACTED = "[[spicy-redacted]]";
 
 /**
@@ -71,30 +72,6 @@ export function revealSpicy(md: string): string {
     .replace(SPAN, "$1")
     .split(OPEN).join("")
     .split(CLOSE).join("");
-}
-
-/**
- * Redacted view: replace each spicy span with a standalone placeholder block; the
- * enclosed text is dropped entirely. Kept for reference / the strongest no-leak
- * guarantee, though the reader paths now use preview/clean instead.
- */
-export function redactSpicy(md: string): string {
-  const block = `\n\n${SPICY_REDACTED}\n\n`;
-  let out = md.replace(SPAN, block);
-
-  const openIdx = out.indexOf(OPEN);
-  if (openIdx !== -1) {
-    // Unclosed marker: redact from here to the end rather than risk a leak.
-    out = out.slice(0, openIdx) + block;
-  }
-  out = out.split(CLOSE).join("");
-
-  // Collapse runs of adjacent placeholders (e.g. back-to-back spans) into one.
-  out = out.replace(
-    new RegExp(`(?:\\s*\\[\\[spicy-redacted\\]\\]\\s*){2,}`, "g"),
-    block
-  );
-  return out;
 }
 
 /**
